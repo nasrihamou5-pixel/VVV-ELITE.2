@@ -1,27 +1,68 @@
 /* ============ VVV — Elite Athletic Intelligence ============ */
 
+/* ---------- CLOUD SYNC (Supabase) ---------- */
+window.currentUserId = null;
+window.currentUserEmail = null;
+
+async function cloudPullAll(uid){
+  if(!window.supabaseClient) return;
+  try{
+    const { data, error } = await window.supabaseClient.from('user_data').select('key,value').eq('user_id', uid);
+    if(error){ console.error('cloud pull error', error); return; }
+    if(data) data.forEach(row => { localStorage.setItem('vvv_'+row.key, JSON.stringify(row.value)); });
+  }catch(e){ console.error('cloud pull exception', e); }
+}
+
+async function cloudPush(key, value){
+  if(!window.supabaseClient || !window.currentUserId) return;
+  try{
+    await window.supabaseClient.from('user_data').upsert(
+      { user_id: window.currentUserId, key, value, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,key' }
+    );
+  }catch(e){ console.error('cloud push error', e); }
+}
+
+function signInWithGoogle(){
+  if(!window.supabaseClient) return;
+  window.supabaseClient.auth.signInWithOAuth({
+    provider:'google',
+    options:{ redirectTo: window.location.href }
+  });
+}
+
+function signOutUser(){
+  if(!confirm('Se déconnecter ? Tes données restent sauvegardées sur ton compte.')) return;
+  if(window.supabaseClient) window.supabaseClient.auth.signOut();
+  else location.reload();
+}
+
 /* ---------- STORAGE ---------- */
 const DB = {
   load(k){ try{ return JSON.parse(localStorage.getItem('vvv_'+k)); }catch(e){ return null; } },
-  save(k,v){ localStorage.setItem('vvv_'+k, JSON.stringify(v)); }
+  save(k,v){ localStorage.setItem('vvv_'+k, JSON.stringify(v)); cloudPush(k,v); }
 };
 
 /* ---------- STATE ---------- */
-let P = DB.load('profile') || { setupDone:false };
-let ACCOUNT = DB.load('account') || null;
-let SESS = DB.load('sessions') || [];
-let MSESS = DB.load('muscu_sessions') || [];
-let CUSTOM = DB.load('custom_progs') || [];
-let PLAN = DB.load('run_plan') || null;
-let GOALS = DB.load('daily_goals') || {};
-let AGENDA = DB.load('agenda') || [];
-let XP = DB.load('xp') || { total:0, level:1, name:'Recrue', pastGoalXP:0 };
-let RECORDS = DB.load('records') || [];
-let PREFS = DB.load('prefs') || {};
-let WEIGHTLOG = DB.load('weightlog') || [];
-let TRACKER = DB.load('tracker') || null;
-let SESSLOG = DB.load('sesslog') || [];
-let MUSCU_PR = DB.load('muscu_pr') || {};
+let P, SESS, MSESS, CUSTOM, PLAN, GOALS, AGENDA, XP, RECORDS, PREFS, WEIGHTLOG, TRACKER, SESSLOG, MUSCU_PR;
+
+function reloadState(){
+  P = DB.load('profile') || { setupDone:false };
+  SESS = DB.load('sessions') || [];
+  MSESS = DB.load('muscu_sessions') || [];
+  CUSTOM = DB.load('custom_progs') || [];
+  PLAN = DB.load('run_plan') || null;
+  GOALS = DB.load('daily_goals') || {};
+  AGENDA = DB.load('agenda') || [];
+  XP = DB.load('xp') || { total:0, level:1, name:'Recrue', pastGoalXP:0 };
+  RECORDS = DB.load('records') || [];
+  PREFS = DB.load('prefs') || {};
+  WEIGHTLOG = DB.load('weightlog') || [];
+  TRACKER = DB.load('tracker') || null;
+  SESSLOG = DB.load('sesslog') || [];
+  MUSCU_PR = DB.load('muscu_pr') || {};
+}
+reloadState();
 
 function saveAll(){
   DB.save('profile',P); DB.save('sessions',SESS); DB.save('muscu_sessions',MSESS);
@@ -552,59 +593,45 @@ function boot(){
   if(P.notif!==false) ensureNotifPerm();
   $('#nav-pill').style.width='calc(20% - 0px)';
   $('#nav-pill').style.left='calc(0% + 8px)';
-  if(!ACCOUNT){ startLogin(); return; }          // 1) connexion
-  if(!P.setupDone){ startOnboarding(); return; }  // 2) création profil
-  initApp();                                      // 3) app
+  if(!P.setupDone){ startOnboarding(); return; }  // création profil
+  initApp();                                      // app
 }
 
-/* ============ CONNEXION / COMPTE ============ */
-function startLogin(){ $('#login').classList.add('on'); $('#loginMain').style.display='block'; $('#loginEmail').style.display='none'; }
+/* ============ CONNEXION / COMPTE (Supabase) ============ */
+function startLogin(){ $('#login').classList.add('on'); }
 function endLogin(){ $('#login').classList.remove('on'); }
-function afterLogin(){
-  DB.save('account',ACCOUNT);
-  endLogin();
-  // Pré-remplit le prénom si le profil n'existe pas encore
-  if(!P.setupDone && ACCOUNT.name){ setTimeout(()=>{ const el=$('#ob_name'); if(el&&!el.value) el.value=ACCOUNT.name; },100); }
-  if(!P.setupDone) startOnboarding(); else initApp();
-  toast('Bienvenue '+(ACCOUNT.name||'')+' 👋');
-  sfx&&sfx('goal');
+
+async function startApp(){
+  if(!window.supabaseClient){ boot(); return; }
+  const { data:{ session } } = await window.supabaseClient.auth.getSession();
+  if(session && session.user){
+    window.currentUserId = session.user.id;
+    window.currentUserEmail = session.user.email;
+    await cloudPullAll(session.user.id);
+    reloadState();
+    endLogin();
+    boot();
+  } else {
+    startLogin();
+  }
+  window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if(event === 'SIGNED_IN' && session){
+      window.currentUserId = session.user.id;
+      window.currentUserEmail = session.user.email;
+      await cloudPullAll(session.user.id);
+      reloadState();
+      endLogin();
+      toast('Bienvenue 👋');
+      sfx&&sfx('goal');
+      boot();
+    } else if(event === 'SIGNED_OUT'){
+      location.reload();
+    }
+  });
 }
-function loginGoogle(){
-  // OAuth Google réel nécessite un serveur + Client ID + domaine autorisé,
-  // impossible en app 100% locale hors-ligne. On simule une connexion Google
-  // en créant/récupérant un compte local associé à un e-mail Google.
-  const email=prompt('Connexion Google\n\nEntre ton adresse Gmail :','');
-  if(email===null) return;
-  const clean=(email||'').trim().toLowerCase();
-  if(!clean || !clean.includes('@')){ toast('Adresse e-mail invalide'); return; }
-  const name=clean.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-  ACCOUNT={provider:'google',email:clean,name,createdAt:Date.now()};
-  afterLogin();
-}
-function showEmailLogin(){ $('#loginMain').style.display='none'; $('#loginEmail').style.display='block'; }
-function backLoginMain(){ $('#loginMain').style.display='block'; $('#loginEmail').style.display='none'; }
-function loginEmail(){
-  const name=$('#au_name').value.trim(), email=$('#au_email').value.trim().toLowerCase(), pass=$('#au_pass').value;
-  if(!email||!email.includes('@')){ toast('E-mail invalide'); return; }
-  if(pass.length<4){ toast('Mot de passe trop court (min 4)'); return; }
-  // "Compte" stocké localement (hashé simplement)
-  ACCOUNT={provider:'email',email,name:name||email.split('@')[0],pass:btoa(pass),createdAt:Date.now()};
-  afterLogin();
-}
-function loginGuest(){
-  ACCOUNT={provider:'guest',name:'Invité',createdAt:Date.now()};
-  afterLogin();
-}
-function logout(){
-  if(!confirm('Se déconnecter ? Tes données restent sur cet appareil.')) return;
-  ACCOUNT=null; localStorage.removeItem('vvv_account');
-  location.reload();
-}
-function switchAccount(){
-  if(!confirm('Changer de compte ? Tu reviendras à l\u2019écran de connexion.')) return;
-  ACCOUNT=null; localStorage.removeItem('vvv_account');
-  location.reload();
-}
+
+function logout(){ signOutUser(); }
+function switchAccount(){ signOutUser(); }
 function initApp(){
   $('#ob').classList.remove('on');
   applyTheme();
@@ -3040,18 +3067,15 @@ function renderProfile(){
   h+='<button class="btn ghost stag" style="margin-top:10px;animation-delay:.16s" onclick="openRecords()">🏅 '+t('perfHistory')+'</button>';
   // ===== COMPTE =====
   h+='<div class="lab" style="margin:22px 0 10px">👤 Compte</div>';
-  if(ACCOUNT){
-    const provIcon=ACCOUNT.provider==='google'?'🔴 Google':ACCOUNT.provider==='email'?'✉️ E-mail':'👤 Invité';
-    const sync=ACCOUNT.provider==='guest'?'Non synchronisé':'Sauvegardé localement';
+  if(window.currentUserEmail){
     h+='<div class="card stag"><div class="row"><div class="row" style="gap:12px">'+
-      '<div style="width:44px;height:44px;border-radius:50%;background:var(--ed);color:var(--e);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px">'+((ACCOUNT.name||'?')[0].toUpperCase())+'</div>'+
-      '<div><div style="font-weight:700">'+(ACCOUNT.name||'Utilisateur')+'</div><div style="font-size:12px;color:var(--muted)">'+(ACCOUNT.email||provIcon)+'</div></div></div>'+
-      '<span class="badge" style="font-size:10px">'+provIcon+'</span></div>'+
-      '<div style="font-size:11px;color:var(--dim);margin-top:10px">☁️ '+sync+' · Connecté le '+new Date(ACCOUNT.createdAt).toLocaleDateString('fr-FR')+'</div>'+
-      (ACCOUNT.provider==='guest'?'<button class="btn sm" style="margin-top:12px" onclick="switchAccount()">🔐 Créer un compte</button>':'')+
-      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn ghost sm" onclick="switchAccount()">🔄 Changer de compte</button><button class="btn ghost sm" style="color:var(--bad)" onclick="logout()">🚪 '+t('logout')+'</button></div></div>';
+      '<div style="width:44px;height:44px;border-radius:50%;background:var(--ed);color:var(--e);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px">'+(P.name?P.name[0].toUpperCase():'?')+'</div>'+
+      '<div><div style="font-weight:700">'+(P.name||'Athlète')+'</div><div style="font-size:12px;color:var(--muted)">'+window.currentUserEmail+'</div></div></div>'+
+      '<span class="badge" style="font-size:10px">🔴 Google</span></div>'+
+      '<div style="font-size:11px;color:var(--dim);margin-top:10px">☁️ Synchronisé sur le cloud</div>'+
+      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn ghost sm" style="color:var(--bad)" onclick="logout()">🚪 '+t('logout')+'</button></div></div>';
   } else {
-    h+='<div class="card stag"><button class="btn" onclick="switchAccount()">🔐 Se connecter</button></div>';
+    h+='<div class="card stag"><button class="btn" onclick="signInWithGoogle()">🔐 Se connecter</button></div>';
   }
   // OBJECTIF
   h+=sec('🎯 '+t('objective'));
@@ -3296,5 +3320,5 @@ window.addEventListener('offline',()=>{ toast('🔌 Mode hors ligne — tout res
 // Sync silencieuse périodique tant que l'app est ouverte
 setInterval(()=>{ if(navigator.onLine) syncOnline(true); },5*60*1000);
 
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startApp); else startApp();
 setupPWA();
