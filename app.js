@@ -4,12 +4,36 @@
 window.currentUserId = null;
 window.currentUserEmail = null;
 
+const VVV_ARRAY_KEYS = ['sessions','muscu_sessions','records','weightlog','sesslog','agenda','custom_progs'];
+
+function mergeStorageValue(key, localVal, cloudVal){
+  if(VVV_ARRAY_KEYS.includes(key)){
+    if(!Array.isArray(localVal)) return cloudVal || [];
+    if(!Array.isArray(cloudVal)) return localVal || [];
+    const seen = new Set(); const merged = [];
+    [...cloudVal, ...localVal].forEach(item=>{
+      const sig = item && (item.id || (item.date && (item.type||'')) || JSON.stringify(item));
+      if(!seen.has(sig)){ seen.add(sig); merged.push(item); }
+    });
+    return merged;
+  }
+  if(cloudVal===null || cloudVal===undefined) return localVal;
+  if(localVal===null || localVal===undefined) return cloudVal;
+  return cloudVal;
+}
+
 async function cloudPullAll(uid){
   if(!window.supabaseClient) return;
   try{
     const { data, error } = await window.supabaseClient.from('user_data').select('key,value').eq('user_id', uid);
     if(error){ console.error('cloud pull error', error); return; }
-    if(data) data.forEach(row => { localStorage.setItem('vvv_'+row.key, JSON.stringify(row.value)); });
+    if(!data) return;
+    data.forEach(row => {
+      let localVal = null;
+      try{ const raw = localStorage.getItem('vvv_'+row.key); localVal = raw ? JSON.parse(raw) : null; }catch(e){}
+      const merged = mergeStorageValue(row.key, localVal, row.value);
+      localStorage.setItem('vvv_'+row.key, JSON.stringify(merged));
+    });
   }catch(e){ console.error('cloud pull exception', e); }
 }
 
@@ -35,6 +59,25 @@ function signOutUser(){
   if(!confirm('Se déconnecter ? Tes données restent sauvegardées sur ton compte.')) return;
   if(window.supabaseClient) window.supabaseClient.auth.signOut();
   else location.reload();
+}
+
+function addAnotherAccount(){
+  if(!confirm('Tu vas être déconnecté(e) pour te reconnecter avec un autre compte Google. Tes données actuelles restent sauvegardées.')) return;
+  if(window.supabaseClient) window.supabaseClient.auth.signOut();
+  else location.reload();
+}
+
+async function deleteAccountCompletely(){
+  if(!confirm('⚠️ Cette action va supprimer TOUTES tes données (séances, records, XP, profil...) de façon définitive, sur le cloud et sur cet appareil. Continuer ?')) return;
+  if(!confirm('Dernière confirmation : es-tu vraiment sûr(e) ? Cette action est irréversible.')) return;
+  try{
+    if(window.supabaseClient && window.currentUserId){
+      await window.supabaseClient.from('user_data').delete().eq('user_id', window.currentUserId);
+    }
+  }catch(e){ console.error('delete account data error', e); }
+  Object.keys(localStorage).filter(k=>k.startsWith('vvv_')).forEach(k=>localStorage.removeItem(k));
+  if(window.supabaseClient) await window.supabaseClient.auth.signOut();
+  location.reload();
 }
 
 /* ---------- STORAGE ---------- */
@@ -609,6 +652,7 @@ async function startApp(){
     window.currentUserEmail = session.user.email;
     await cloudPullAll(session.user.id);
     reloadState();
+    saveAll();
     endLogin();
     boot();
   } else {
@@ -620,6 +664,7 @@ async function startApp(){
       window.currentUserEmail = session.user.email;
       await cloudPullAll(session.user.id);
       reloadState();
+      saveAll();
       endLogin();
       toast('Bienvenue 👋');
       sfx&&sfx('goal');
@@ -3073,7 +3118,12 @@ function renderProfile(){
       '<div><div style="font-weight:700">'+(P.name||'Athlète')+'</div><div style="font-size:12px;color:var(--muted)">'+window.currentUserEmail+'</div></div></div>'+
       '<span class="badge" style="font-size:10px">🔴 Google</span></div>'+
       '<div style="font-size:11px;color:var(--dim);margin-top:10px">☁️ Synchronisé sur le cloud</div>'+
-      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn ghost sm" style="color:var(--bad)" onclick="logout()">🚪 '+t('logout')+'</button></div></div>';
+      '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">'+
+        '<button class="btn ghost sm" onclick="addAnotherAccount()">➕ Ajouter un compte</button>'+
+        '<button class="btn ghost sm" style="color:var(--bad)" onclick="logout()">🚪 '+t('logout')+'</button>'+
+      '</div>'+
+      '<button class="btn ghost sm" style="margin-top:10px;color:var(--bad);width:100%" onclick="deleteAccountCompletely()">🗑 Supprimer mon compte et mes données</button>'+
+      '</div>';
   } else {
     h+='<div class="card stag"><button class="btn" onclick="signInWithGoogle()">🔐 Se connecter</button></div>';
   }
