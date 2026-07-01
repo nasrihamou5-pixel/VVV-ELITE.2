@@ -2503,6 +2503,7 @@ const TOOLS={
   aio:{name:'Performance Lab',sub:'Distance · Temps · Allure · Vitesse',icon:ICN('lab'),fn:'renderAIO'},
   sante:{name:'Tableau de bord Santé',sub:'Poids, IMC, sommeil, nutrition...',icon:ICN('health'),fn:'renderSanteTool'},
   chrono:{name:'Chronomètre',sub:'Tours, splits & statistiques',icon:ICN('stopwatch'),fn:'renderChrono'},
+  coachChat:{name:'Discuter avec le Coach',sub:'Blessures, sensations, questions...',icon:ICN('mosque'),fn:'renderCoachChat'},
   convert:{name:'Convertisseur',sub:'Allure, distance, poids...',icon:ICN('convert'),fn:'renderConvertTool'},
   notes:{name:'Notes',sub:'Bloc-notes rapide',icon:ICN('note'),fn:'renderNotesTool'},
   // accessibles via recherche
@@ -2513,9 +2514,9 @@ const TOOLS={
   agenda:{name:'Agenda',sub:'Tous vos événements',icon:ICN('calendar'),fn:'renderAgenda',hidden:true},
   priere:{name:'Prières',sub:'Tous les horaires',icon:ICN('mosque'),fn:'renderPriere',hidden:true}
 };
-const MAIN_TOOLS=['aio','sante','chrono'];
+const MAIN_TOOLS=['coachChat','aio','sante','chrono'];
 const OTHER_TOOLS=['convert','notes'];
-function toolFav(){ return PREFS.favTools||['aio','sante','chrono','convert']; }
+function toolFav(){ return PREFS.favTools||['coachChat','aio','sante','chrono']; }
 function toggleFav(k){ let f=toolFav(); f=f.includes(k)?f.filter(x=>x!==k):[...f,k]; PREFS.favTools=f; saveAll(); renderOutils(); }
 let toolSearch='';
 function recentTools(){ return PREFS.recentTools||[]; }
@@ -2565,7 +2566,7 @@ function outilsHome(){
   h+='</div>';
   return h;
 }
-function favShort(n){ const m={'Performance Lab':'Perf. Lab','Tableau de bord Santé':'Santé','Chronomètre':'Chrono','Convertisseur':'Convert.','VDOT & VO₂max':'VDOT','Calories & Métabolisme':'Calories','Hydratation':'Eau'}; return m[n]||n; }
+function favShort(n){ const m={'Performance Lab':'Perf. Lab','Tableau de bord Santé':'Santé','Chronomètre':'Chrono','Convertisseur':'Convert.','VDOT & VO₂max':'VDOT','Calories & Métabolisme':'Calories','Hydratation':'Eau','Discuter avec le Coach':'Coach IA'}; return m[n]||n; }
 function editFavs(){
   let h='<div class="tip" style="margin-bottom:14px">Touche une étoile pour ajouter/retirer un outil de tes favoris.</div>';
   Object.entries(TOOLS).forEach(([k,t])=>{ h+=toolRow(k,t); });
@@ -2575,6 +2576,81 @@ function toolRow(k,t){ const fav=toolFav().includes(k);
   return '<div class="card" style="padding:13px;margin-bottom:8px"><div class="row"><div class="row" style="gap:13px;flex:1;cursor:pointer" onclick="openTool(\''+k+'\')"><div style="width:40px;height:40px;border-radius:11px;background:var(--s2);color:var(--e);display:flex;align-items:center;justify-content:center">'+t.icon+'</div><div><div style="font-weight:700;font-size:14px">'+t.name+'</div>'+(t.sub?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+t.sub+'</div>':'')+'</div></div><span onclick="event.stopPropagation();toggleFav(\''+k+'\')" style="color:'+(fav?'var(--or)':'var(--dim)')+';font-size:18px;cursor:pointer;padding:4px">★</span></div></div>'; }
 function openQuickTimer(){ outilsFrom='home'; outilsTab='_timer'; renderOutilsTimer(); }
 function renderOutilsTimer(){ $('#s-outils').innerHTML='<div class="row" style="margin-bottom:14px"><button class="x" onclick="outilsTab=\'home\';renderOutils()">‹</button><div class="man" style="font-weight:800;font-size:17px;flex:1;text-align:center">Minuteur</div><div style="width:34px"></div></div><div id="outBody"></div>'; renderTimer(); }
+
+/* ============ COACH IA — APPEL EDGE FUNCTION SUPABASE ============ */
+const COACH_AI_URL='https://bsrbzuhvqtjkkmpmxyzw.supabase.co/functions/v1/coach-ai';
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function callCoachAI(mode, extra){
+  if(!window.supabaseClient) throw new Error('Supabase non initialisé');
+  const { data:{ session } } = await window.supabaseClient.auth.getSession();
+  if(!session) throw new Error('Tu dois être connecté pour utiliser le Coach IA');
+  const resp = await fetch(COACH_AI_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token },
+    body: JSON.stringify({
+      mode,
+      profile: P,
+      recentSessions: (SESS||[]).slice(-10),
+      records: RECORDS||[],
+      extra: extra||{}
+    })
+  });
+  let data;
+  try{ data = await resp.json(); }catch(e){ throw new Error('Réponse invalide du serveur'); }
+  if(!resp.ok || data.error) throw new Error(data.error || ('Erreur serveur ('+resp.status+')'));
+  return data.result;
+}
+function parseAIJson(text){
+  try{ const clean=String(text).replace(/```json|```/g,'').trim(); return JSON.parse(clean); }catch(e){ return null; }
+}
+
+/* ---------- CHAT COACH ---------- */
+let COACH_CHAT=(function(){ try{ return JSON.parse(localStorage.getItem('vvv_coach_chat'))||[]; }catch(e){ return []; } })();
+let coachChatBusy=false;
+function saveCoachChat(){ try{ localStorage.setItem('vvv_coach_chat', JSON.stringify(COACH_CHAT.slice(-60))); }catch(e){} }
+function renderCoachChat(){
+  let h='<div id="chatMsgs" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">';
+  if(COACH_CHAT.length===0){
+    h+='<div class="tip">💬 Parle à ton coach : une douleur, une sensation bizarre pendant une séance, une question sur ton plan... il connaît ton profil, tes dernières séances et tes records.</div>';
+  }
+  COACH_CHAT.forEach(m=>{
+    if(m.role==='user'){
+      h+='<div style="align-self:flex-end;max-width:85%;background:var(--e);color:#fff;padding:10px 14px;border-radius:16px 16px 4px 16px;font-size:14px;line-height:1.42">'+esc(m.text)+'</div>';
+    }else{
+      h+='<div style="align-self:flex-start;max-width:85%;background:var(--s2);border:1px solid var(--hair);padding:10px 14px;border-radius:16px 16px 16px 4px;font-size:14px;line-height:1.42;white-space:pre-wrap">'+esc(m.text)+'</div>';
+    }
+  });
+  if(coachChatBusy){
+    h+='<div style="align-self:flex-start;color:var(--muted);font-size:13px;padding:0 4px">🧠 Le coach réfléchit...</div>';
+  }
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:6px"><input class="inp" id="chatInput" placeholder="Écris ton message..." style="flex:1" '+(coachChatBusy?'disabled':'')+'><button class="btn" style="width:52px;flex:0 0 52px;padding:0" id="chatSendBtn" '+(coachChatBusy?'disabled':'')+' onclick="sendCoachChat()">➤</button></div>';
+  if(COACH_CHAT.length>0){ h+='<div style="text-align:center"><span style="font-size:12px;color:var(--dim);cursor:pointer" onclick="clearCoachChat()">Effacer la conversation</span></div>'; }
+  $('#outBody').innerHTML=h;
+  const inp=$('#chatInput');
+  if(inp){ inp.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCoachChat(); } }; }
+  const box=$('#chatMsgs'); if(box) box.scrollTop=box.scrollHeight;
+  $('#scroll').scrollTop=$('#scroll').scrollHeight;
+}
+function clearCoachChat(){ COACH_CHAT=[]; saveCoachChat(); renderCoachChat(); }
+async function sendCoachChat(){
+  if(coachChatBusy) return;
+  const inp=$('#chatInput'); if(!inp) return;
+  const text=inp.value.trim();
+  if(!text) return;
+  COACH_CHAT.push({role:'user',text}); saveCoachChat();
+  coachChatBusy=true;
+  renderCoachChat();
+  try{
+    const reply=await callCoachAI('custom_question',{question:text});
+    COACH_CHAT.push({role:'ai',text:reply||'…'});
+  }catch(e){
+    COACH_CHAT.push({role:'ai',text:'⚠️ Erreur : '+(e.message||'impossible de contacter le coach IA.')});
+  }
+  saveCoachChat();
+  coachChatBusy=false;
+  renderCoachChat();
+}
 
 /* ============ TABLEAU DE BORD SANTÉ ============ */
 function renderSanteTool(){
