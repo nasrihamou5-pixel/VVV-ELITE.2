@@ -1547,7 +1547,7 @@ function buildSessionV2(type,o){
       km=easyKm; p=S(pace.EF); rpe=3; label='EF'; title='Endurance';
       d={objectif:'Endurance.',warmup:'-',body:km+' km facile.',paces:S(pace.EF)+'/km',recovery:'-',cooldown:'-',tips:[],mistakes:[],why:'Base aérobie.'};
   }
-  if(isDeload && km>0){ km=Math.round(km*0.8); d.objectif='🟢 SEMAINE ALLÉGÉE — '+d.objectif; }
+  if(isDeload && km>0){ d.objectif='🟢 SEMAINE ALLÉGÉE — '+d.objectif; }
   return {km,pace:p,rpe,title,label,detail:d};
 }
 
