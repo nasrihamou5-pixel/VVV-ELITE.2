@@ -24,7 +24,10 @@ async function cloudPush(key, value){
 
 function signInWithGoogle(){
   if(!window.supabaseClient) return;
-  window.supabaseClient.auth.signInWithOAuth({ provider:'google' });
+  window.supabaseClient.auth.signInWithOAuth({
+    provider:'google',
+    options:{ redirectTo: window.location.href }
+  });
 }
 
 function signOutUser(){
