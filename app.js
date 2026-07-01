@@ -1,26 +1,70 @@
 /* ============ VVV — Elite Athletic Intelligence ============ */
 
+/* ---------- CLOUD SYNC (Supabase) ---------- */
+window.currentUserId = null;
+
+async function cloudPullAll(uid){
+  if(!window.supabaseClient) return;
+  try{
+    const { data, error } = await window.supabaseClient.from('user_data').select('key,value').eq('user_id', uid);
+    if(error){ console.error('cloud pull error', error); return; }
+    if(data) data.forEach(row => { localStorage.setItem('vvv_'+row.key, JSON.stringify(row.value)); });
+  }catch(e){ console.error('cloud pull exception', e); }
+}
+
+async function cloudPush(key, value){
+  if(!window.supabaseClient || !window.currentUserId) return;
+  try{
+    await window.supabaseClient.from('user_data').upsert(
+      { user_id: window.currentUserId, key, value, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,key' }
+    );
+  }catch(e){ console.error('cloud push error', e); }
+}
+
+function signInWithGoogle(){
+  if(!window.supabaseClient) return;
+  window.supabaseClient.auth.signInWithOAuth({
+    provider:'google',
+    options:{ redirectTo: window.location.href }
+  });
+}
+
+function signOutUser(){
+  if(!confirm('Se déconnecter ?')) return;
+  if(window.supabaseClient) window.supabaseClient.auth.signOut();
+  else location.reload();
+}
+
+function showLoginScreen(){ const el=document.getElementById('loginScreen'); if(el) el.style.display='flex'; }
+function hideLoginScreen(){ const el=document.getElementById('loginScreen'); if(el) el.style.display='none'; }
+
 /* ---------- STORAGE ---------- */
 const DB = {
   load(k){ try{ return JSON.parse(localStorage.getItem('vvv_'+k)); }catch(e){ return null; } },
-  save(k,v){ localStorage.setItem('vvv_'+k, JSON.stringify(v)); }
+  save(k,v){ localStorage.setItem('vvv_'+k, JSON.stringify(v)); cloudPush(k,v); }
 };
 
 /* ---------- STATE ---------- */
-let P = DB.load('profile') || { setupDone:false };
-let SESS = DB.load('sessions') || [];
-let MSESS = DB.load('muscu_sessions') || [];
-let CUSTOM = DB.load('custom_progs') || [];
-let PLAN = DB.load('run_plan') || null;
-let GOALS = DB.load('daily_goals') || {};
-let AGENDA = DB.load('agenda') || [];
-let XP = DB.load('xp') || { total:0, level:1, name:'Recrue', pastGoalXP:0 };
-let RECORDS = DB.load('records') || [];
-let PREFS = DB.load('prefs') || {};
-let WEIGHTLOG = DB.load('weightlog') || [];
-let TRACKER = DB.load('tracker') || null;
-let SESSLOG = DB.load('sesslog') || [];
-let MUSCU_PR = DB.load('muscu_pr') || {};
+let P, SESS, MSESS, CUSTOM, PLAN, GOALS, AGENDA, XP, RECORDS, PREFS, WEIGHTLOG, TRACKER, SESSLOG, MUSCU_PR;
+
+function reloadState(){
+  P = DB.load('profile') || { setupDone:false };
+  SESS = DB.load('sessions') || [];
+  MSESS = DB.load('muscu_sessions') || [];
+  CUSTOM = DB.load('custom_progs') || [];
+  PLAN = DB.load('run_plan') || null;
+  GOALS = DB.load('daily_goals') || {};
+  AGENDA = DB.load('agenda') || [];
+  XP = DB.load('xp') || { total:0, level:1, name:'Recrue', pastGoalXP:0 };
+  RECORDS = DB.load('records') || [];
+  PREFS = DB.load('prefs') || {};
+  WEIGHTLOG = DB.load('weightlog') || [];
+  TRACKER = DB.load('tracker') || null;
+  SESSLOG = DB.load('sesslog') || [];
+  MUSCU_PR = DB.load('muscu_pr') || {};
+}
+reloadState();
 
 function saveAll(){
   DB.save('profile',P); DB.save('sessions',SESS); DB.save('muscu_sessions',MSESS);
@@ -28,70 +72,6 @@ function saveAll(){
   DB.save('agenda',AGENDA); DB.save('xp',XP);
   DB.save('records',RECORDS); DB.save('prefs',PREFS); DB.save('weightlog',WEIGHTLOG);
   DB.save('tracker',TRACKER); DB.save('sesslog',SESSLOG);
-}
-
-/* ============ INTERNATIONALISATION (FR / EN / AR) ============ */
-const I18N={
-  fr:{
-    nav_home:'Accueil',nav_sport:'Sport',nav_stats:'Stats',nav_outils:'Outils',nav_profil:'Profil',
-    home:'Accueil',sport:'Sport',stats:'Statistiques',outils:'Outils',profil:'Profil',
-    sub_sport:'Course & Musculation',sub_stats:'Tes données réelles',sub_outils:'Calculs & timers',
-    save:'Sauver',cancel:'Annuler',add:'Ajouter',edit:'Modifier',delete:'Supprimer',close:'Fermer',validate:'Valider',back:'Retour',seeAll:'Voir tout',
-    running:'Course',muscu:'Musculation',coachIA:'Coach IA',myPlan:'Plan personnel',
-    perfHistory:'Historique des performances',editInfos:'Modifier mes informations',
-    objective:'Objectif',appearance:'Apparence',accentColor:'Couleur d\u2019accent',language:'Langue',
-    notifsApp:'Notifications & app',trainReminders:'Rappels d\u2019entraînement',sounds:'Sons & vibrations',units:'Unités métriques (km)',
-    dataPrivacy:'Données & confidentialité',exportData:'Exporter mes données (JSON)',importData:'Importer des données',resetApp:'Réinitialiser l\u2019application',
-    photo:'Photo',bio:'Biographie',addPhoto:'Ajouter une photo',changePhoto:'Changer',removePhoto:'Supprimer',
-    height:'Taille',weight:'Poids',age:'Âge',level:'Niveau',logout:'Déconnexion',
-    levelGuide:'Comment choisir mon niveau ?',xpProgress:'Progression XP',coach:'Coach',
-    todayGoals:'Objectifs du jour',weekLoad:'Charge de la semaine',sessions:'séances',form:'forme'
-  },
-  en:{
-    nav_home:'Home',nav_sport:'Sport',nav_stats:'Stats',nav_outils:'Tools',nav_profil:'Profile',
-    home:'Home',sport:'Sport',stats:'Statistics',outils:'Tools',profil:'Profile',
-    sub_sport:'Running & Strength',sub_stats:'Your real data',sub_outils:'Calculators & timers',
-    save:'Save',cancel:'Cancel',add:'Add',edit:'Edit',delete:'Delete',close:'Close',validate:'Confirm',back:'Back',seeAll:'See all',
-    running:'Running',muscu:'Strength',coachIA:'AI Coach',myPlan:'Custom plan',
-    perfHistory:'Performance history',editInfos:'Edit my information',
-    objective:'Goal',appearance:'Appearance',accentColor:'Accent color',language:'Language',
-    notifsApp:'Notifications & app',trainReminders:'Training reminders',sounds:'Sounds & vibration',units:'Metric units (km)',
-    dataPrivacy:'Data & privacy',exportData:'Export my data (JSON)',importData:'Import data',resetApp:'Reset the app',
-    photo:'Photo',bio:'Biography',addPhoto:'Add a photo',changePhoto:'Change',removePhoto:'Remove',
-    height:'Height',weight:'Weight',age:'Age',level:'Level',logout:'Log out',
-    levelGuide:'How to choose my level?',xpProgress:'XP progress',coach:'Coach',
-    todayGoals:'Today\u2019s goals',weekLoad:'Weekly load',sessions:'sessions',form:'form'
-  },
-  ar:{
-    nav_home:'الرئيسية',nav_sport:'رياضة',nav_stats:'إحصائيات',nav_outils:'أدوات',nav_profil:'الملف',
-    home:'الرئيسية',sport:'الرياضة',stats:'الإحصائيات',outils:'الأدوات',profil:'الملف الشخصي',
-    sub_sport:'الجري وكمال الأجسام',sub_stats:'بياناتك الحقيقية',sub_outils:'حاسبات ومؤقتات',
-    save:'حفظ',cancel:'إلغاء',add:'إضافة',edit:'تعديل',delete:'حذف',close:'إغلاق',validate:'تأكيد',back:'رجوع',seeAll:'عرض الكل',
-    running:'الجري',muscu:'كمال الأجسام',coachIA:'مدرب ذكي',myPlan:'خطة شخصية',
-    perfHistory:'سجل الإنجازات',editInfos:'تعديل معلوماتي',
-    objective:'الهدف',appearance:'المظهر',accentColor:'لون التمييز',language:'اللغة',
-    notifsApp:'الإشعارات والتطبيق',trainReminders:'تذكيرات التدريب',sounds:'الأصوات والاهتزاز',units:'وحدات مترية (كم)',
-    dataPrivacy:'البيانات والخصوصية',exportData:'تصدير بياناتي (JSON)',importData:'استيراد البيانات',resetApp:'إعادة ضبط التطبيق',
-    photo:'الصورة',bio:'نبذة',addPhoto:'إضافة صورة',changePhoto:'تغيير',removePhoto:'حذف',
-    height:'الطول',weight:'الوزن',age:'العمر',level:'المستوى',logout:'تسجيل الخروج',
-    levelGuide:'كيف أختار مستواي؟',xpProgress:'تقدم النقاط',coach:'المدرب',
-    todayGoals:'أهداف اليوم',weekLoad:'حمل الأسبوع',sessions:'حصص',form:'اللياقة'
-  }
-};
-function curLang(){ return (P&&P.lang)||'fr'; }
-function t(key){ const l=curLang(); return (I18N[l]&&I18N[l][key])||I18N.fr[key]||key; }
-const LANGS=[['fr','🇫🇷','Français'],['en','🇬🇧','English'],['ar','🇩🇿','العربية']];
-function setLang(l){
-  P.lang=l; saveAll();
-  document.documentElement.lang=l;
-  document.documentElement.dir=(l==='ar')?'rtl':'ltr';
-  applyNavLabels();
-  // re-render la vue active
-  const active=document.querySelector('.nb.on'); if(active) nav(active.dataset.s);
-  toast('✓');
-}
-function applyNavLabels(){
-  document.querySelectorAll('.nb').forEach(b=>{ const s=b.dataset.s; const sp=b.querySelector('span'); if(sp) sp.textContent=t('nav_'+s); });
 }
 /* ---------- RECORDS personnels ---------- */
 function personalRecords(){
@@ -242,7 +222,6 @@ function xpProgress(){
 /* Compat : addXP devient un simple déclencheur de recalcul + feedback */
 function addXP(amount,reason){
   refreshXP({animate:true});
-  sfx('xp');
   if(reason) toast('+'+amount+' XP · '+reason);
 }
 function bestStreak(){
@@ -258,7 +237,7 @@ function bestStreak(){
 }
 /* ---------- LEVEL UP ANIMATION ---------- */
 function levelUpAnimation(level){
-  burst(); sfx('medal');
+  burst();
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;z-index:13500;display:flex;align-items:center;justify-content:center;background:rgba(5,7,10,.86);backdrop-filter:blur(8px);animation:fade .3s';
   ov.innerHTML='<div style="text-align:center;animation:popIn .6s cubic-bezier(.34,1.56,.64,1)">'+
@@ -279,128 +258,6 @@ function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.get
 function dateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function daysBetween(a,b){ return Math.round((b-a)/86400000); }
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
-
-/* ============ SONS PREMIUM (Web Audio, synthétisés, discrets) ============ */
-let _actx=null;
-function audioCtx(){ if(!_actx){ try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } } if(_actx.state==='suspended') _actx.resume(); return _actx; }
-function soundsOn(){ return P.sounds!==false; }
-// Débloque l'audio au premier geste utilisateur (politique navigateur)
-document.addEventListener('pointerdown',function unlockAudio(){ try{ audioCtx(); }catch(e){} document.removeEventListener('pointerdown',unlockAudio); },{once:true});
-// note: fréquence, durée, type, volume, délai, glide vers
-function _note(freq,dur,type,vol,delay,toFreq){
-  const ctx=audioCtx(); if(!ctx) return;
-  const t0=ctx.currentTime+(delay||0);
-  const o=ctx.createOscillator(), g=ctx.createGain();
-  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
-  if(toFreq) o.frequency.exponentialRampToValueAtTime(toFreq,t0+dur);
-  g.gain.setValueAtTime(0,t0);
-  g.gain.linearRampToValueAtTime(vol||0.18,t0+0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-  o.connect(g); g.connect(ctx.destination);
-  o.start(t0); o.stop(t0+dur+0.02);
-}
-function sfx(name){
-  if(!soundsOn()) return;
-  switch(name){
-    case 'tick': _note(880,0.05,'square',0.06); break;
-    case 'start': _note(523,0.12,'sine',0.15); _note(784,0.16,'sine',0.15,0.1); break;
-    case 'stop': _note(523,0.14,'sine',0.13); _note(392,0.2,'sine',0.13,0.1); break;
-    case 'goal': _note(659,0.1,'sine',0.16); _note(880,0.18,'sine',0.16,0.09); break;
-    case 'xp': _note(1046,0.08,'triangle',0.13); _note(1318,0.12,'triangle',0.13,0.07); break;
-    case 'medal': _note(659,0.12,'sine',0.16); _note(880,0.12,'sine',0.16,0.1); _note(1318,0.25,'sine',0.18,0.2); break;
-    case 'finish': [523,659,784,1046].forEach((f,i)=>_note(f,0.22,'sine',0.16,i*0.11)); break;
-    case 'timer': for(let i=0;i<3;i++){ _note(1046,0.16,'sine',0.2,i*0.28); } break;
-    case 'notif': _note(880,0.13,'sine',0.18); _note(1174,0.22,'sine',0.18,0.12); break;
-    case 'tap': _note(660,0.04,'sine',0.07); break;
-  }
-}
-
-/* ============ VRAIE ALARME (son répété + vibration + écran d'arrêt) ============ */
-let _alarmIv=null, _alarmStart=0;
-function alarmRing(){
-  // motif d'alarme mélodique (joué en boucle), volume plus fort que les sfx
-  if(soundsOn()){
-    const seq=[[880,0],[1175,0.18],[880,0.36],[1175,0.54]];
-    seq.forEach(([f,d])=>_note(f,0.16,'square',0.32,d));
-    _note(660,0.5,'sine',0.18,0.74);
-  }
-  if(navigator.vibrate) navigator.vibrate([400,150,400,150,400]);
-}
-function startAlarm(title,msg){
-  stopAlarm();
-  _alarmStart=Date.now();
-  try{ audioCtx(); }catch(e){}
-  alarmRing();
-  _alarmIv=setInterval(alarmRing,1300);
-  // sécurité : arrêt automatique après 60 s
-  setTimeout(()=>{ if(_alarmIv) stopAlarm(); },60000);
-  notify(title||'⏰ Alarme',msg||'Le temps est écoulé !');
-  showAlarmScreen(title||'⏰ Temps écoulé !',msg||'');
-}
-function stopAlarm(){
-  if(_alarmIv){ clearInterval(_alarmIv); _alarmIv=null; }
-  if(navigator.vibrate) navigator.vibrate(0);
-  const o=$('#alarmOv'); if(o) o.remove();
-}
-function showAlarmScreen(title,msg){
-  const old=$('#alarmOv'); if(old) old.remove();
-  const ov=document.createElement('div'); ov.id='alarmOv';
-  ov.style.cssText='position:fixed;inset:0;z-index:14000;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,7,10,.92);backdrop-filter:blur(8px);text-align:center;padding:24px;animation:fade .3s';
-  ov.innerHTML='<div style="font-size:84px;animation:alarmShake .5s ease-in-out infinite">⏰</div>'+
-    '<div class="man" style="font-weight:800;font-size:28px;margin-top:14px">'+title+'</div>'+
-    (msg?'<div style="color:var(--muted);font-size:15px;margin-top:8px">'+msg+'</div>':'')+
-    '<button class="btn" style="margin-top:28px;max-width:240px;font-size:17px;padding:16px" onclick="stopAlarm()">Arrêter l\u2019alarme</button>'+
-    '<button class="btn ghost" style="margin-top:10px;max-width:240px" onclick="snoozeAlarm()">⏱ Rappel dans 5 min</button>';
-  ov.onclick=(e)=>{ if(e.target===ov) {} };
-  document.body.appendChild(ov);
-}
-function snoozeAlarm(){
-  stopAlarm();
-  toast('🔔 Rappel dans 5 min');
-  setTimeout(()=>startAlarm('⏰ Rappel','5 minutes écoulées'),5*60*1000);
-}
-
-/* ============ NOTIFICATIONS & ACTIVITÉ EN ARRIÈRE-PLAN ============ */
-let _wakeLock=null, _bgActivity=null;
-function ensureNotifPerm(){ if('Notification'in window && Notification.permission==='default'){ try{ Notification.requestPermission(); }catch(e){} } }
-function notify(title,body){
-  if(P.notif===false) return;
-  if('Notification'in window && Notification.permission==='granted'){
-    try{ const n=new Notification(title,{body,icon:appIconDataURL(),badge:appIconDataURL(),tag:'vvv',renotify:true}); setTimeout(()=>n.close(),6000); return; }catch(e){}
-  }
-  sfx('notif');
-}
-let _bgNotif=null, _bgTick=null;
-async function startBgActivity(type){
-  _bgActivity={type,start:Date.now(),paused:false};
-  try{ if('wakeLock'in navigator){ _wakeLock=await navigator.wakeLock.request('screen'); } }catch(e){}
-  // Notification persistante mise à jour en continu
-  if(P.notif!==false && 'Notification'in window && Notification.permission==='granted'){
-    clearInterval(_bgTick);
-    const update=()=>{
-      if(!_bgActivity) return;
-      let body;
-      if(_bgActivity.type==='Minuteur'){ const left=(typeof timer!=='undefined'&&timer.endAt)?Math.max(0,Math.round((timer.endAt-Date.now())/1000)):0; body='⏳ Restant : '+fmtMS(left); }
-      else { body='⏱ Écoulé : '+fmtTime((Date.now()-_bgActivity.start)/1000); }
-      body+=' · '+(_bgActivity.paused?'⏸ En pause':'▶ En cours');
-      try{ if(_bgNotif) _bgNotif.close(); _bgNotif=new Notification('VVV · '+_bgActivity.type,{body,icon:appIconDataURL(),tag:'vvv-activity',renotify:false,silent:true}); }catch(e){}
-    };
-    update(); _bgTick=setInterval(update,3000);
-  }
-}
-function pauseBgActivity(p){ if(_bgActivity) _bgActivity.paused=p; }
-function stopBgActivity(){
-  _bgActivity=null; clearInterval(_bgTick);
-  try{ if(_bgNotif){ _bgNotif.close(); _bgNotif=null; } }catch(e){}
-  try{ if(_wakeLock){ _wakeLock.release(); _wakeLock=null; } }catch(e){}
-}
-// Réacquiert le wake lock au retour de veille si une activité tourne
-document.addEventListener('visibilitychange',async()=>{
-  if(document.visibilityState==='visible' && _bgActivity && !_wakeLock){
-    try{ if('wakeLock'in navigator) _wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
-  }
-});
-function appIconDataURL(){ return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230A0D12'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='800' fill='%233D7FFF' text-anchor='middle' font-family='sans-serif'%3EV%3C/text%3E%3C/svg%3E"; }
 function ripple(e){
   const b=e.currentTarget, r=document.createElement('span'); r.className='ripple';
   const rect=b.getBoundingClientRect(), sz=Math.max(rect.width,rect.height);
@@ -430,93 +287,7 @@ function burst(){
 
 /* ---------- OVERLAYS ---------- */
 function openOv(id){ $('#'+id).classList.add('on'); }
-function closeOv(id){ $('#'+id).classList.remove('on'); if(id==='ovLib'&&typeof _exDemoTimer!=='undefined'){ clearInterval(_exDemoTimer); } if((id==='ovProg'||id==='ovLive')&&typeof _exDemo2!=='undefined'&&_exDemo2){ clearInterval(_exDemo2); _exDemo2=null; } }
-
-/* ============ WHEEL PICKER réutilisable ============ */
-const PK_H=42;
-function haptic(){ if(navigator.vibrate) navigator.vibrate(8); }
-/* config: { title, cols:[{values:[], sel:idx, unit?, fmt?}], seps:[], onOk:(indices)=>{} } */
-let _pkCfg=null;
-function openPicker(cfg){
-  _pkCfg=cfg;
-  $('#pkTitle').textContent=cfg.title||'Choisir';
-  const wrap=$('#pkWheels'); wrap.innerHTML='';
-  cfg.cols.forEach((col,ci)=>{
-    if(ci>0 && cfg.seps && cfg.seps[ci-1]!=null){ const s=document.createElement('div'); s.className='pk-sep'; s.textContent=cfg.seps[ci-1]; wrap.appendChild(s); }
-    const c=document.createElement('div'); c.className='pkcol'+(col.wide?' wide':''); c.dataset.ci=ci;
-    let inner='<div class="pk-pad"></div>';
-    col.values.forEach((v,i)=>{ inner+='<div class="pkitem" data-i="'+i+'">'+(col.fmt?col.fmt(v):v)+'</div>'; });
-    inner+='<div class="pk-pad"></div>';
-    c.innerHTML=inner;
-    wrap.appendChild(c);
-    if(col.unit){ const u=document.createElement('div'); u.className='pk-unit'; u.textContent=col.unit; wrap.appendChild(u); }
-    const items=c.querySelectorAll('.pkitem');
-    col._last=col.sel;
-    // Met à jour l'apparence selon la distance au centre (zoom progressif fluide)
-    function paint(){
-      const center=c.scrollTop/PK_H; // index flottant centré
-      items.forEach((it,i)=>{
-        const d=Math.abs(i-center);
-        if(d<0.5) it.classList.add('sel'); else it.classList.remove('sel');
-        const scale=Math.max(.7,1.18-d*0.22);
-        const op=Math.max(.25,1-d*0.32);
-        it.style.transform='scale('+scale.toFixed(3)+')';
-        it.style.opacity=op.toFixed(2);
-      });
-    }
-    // init position (après ouverture de l'overlay)
-    requestAnimationFrame(()=>{ requestAnimationFrame(()=>{ c.scrollTop=col.sel*PK_H; paint(); }); });
-    let raf,settle;
-    c.addEventListener('scroll',()=>{
-      if(raf) cancelAnimationFrame(raf);
-      raf=requestAnimationFrame(paint);
-      const idx=Math.max(0,Math.min(col.values.length-1,Math.round(c.scrollTop/PK_H)));
-      if(col._last!==idx){ col._last=idx; col.sel=idx; haptic(); }
-      // snap uniquement quand le défilement s'arrête réellement
-      clearTimeout(settle);
-      settle=setTimeout(()=>{
-        const target=Math.max(0,Math.min(col.values.length-1,Math.round(c.scrollTop/PK_H)));
-        col.sel=target;
-        if(Math.abs(c.scrollTop-target*PK_H)>1) c.scrollTo({top:target*PK_H,behavior:'smooth'});
-        paint();
-      },120);
-    },{passive:true});
-  });
-  $('#pkOk').onclick=()=>{ const idx=cfg.cols.map(c=>c.sel); closeOv('ovPicker'); if(cfg.onOk)cfg.onOk(idx); };
-  openOv('ovPicker');
-}
-/* Helpers de ranges */
-function range(a,b,step){ const o=[]; step=step||1; for(let i=a;i<=b;i+=step)o.push(i); return o; }
-/* Picker Temps h:mm:ss → secondes */
-function pickTime(title,initSec,cb,withHours){
-  initSec=initSec||0;
-  const h=Math.floor(initSec/3600), m=Math.floor((initSec%3600)/60), s=Math.floor(initSec%60);
-  const cols=[]; const seps=[];
-  if(withHours!==false){ cols.push({values:range(0,9),sel:h,unit:'h'}); seps.push(':'); }
-  cols.push({values:range(0,59),sel:m,unit:'min',fmt:v=>String(v).padStart(2,'0')}); seps.push(':');
-  cols.push({values:range(0,59),sel:s,unit:'s',fmt:v=>String(v).padStart(2,'0')});
-  openPicker({title:title||'Temps',cols,seps,onOk:idx=>{ let sec; if(withHours!==false){ sec=idx[0]*3600+idx[1]*60+idx[2]; } else { sec=idx[0]*60+idx[1]; } cb(sec); }});
-}
-/* Picker Allure mm:ss /km → sec/km */
-function pickPace(title,initSpk,cb){
-  initSpk=initSpk||270; const m=Math.floor(initSpk/60), s=Math.floor(initSpk%60);
-  openPicker({title:title||'Allure',cols:[{values:range(2,12),sel:Math.max(0,m-2)},{values:range(0,59),sel:s,fmt:v=>String(v).padStart(2,'0'),unit:'/km'}],seps:[':'],onOk:idx=>cb((idx[0]+2)*60+idx[1])});
-}
-/* Picker Distance (km entiers + décimales) → km */
-function pickDistance(title,initKm,cb){
-  initKm=initKm||10; const whole=Math.floor(initKm), dec=Math.round((initKm-whole)*10);
-  openPicker({title:title||'Distance',cols:[{values:range(0,99),sel:Math.min(99,whole)},{values:range(0,9),sel:dec,unit:'km'}],seps:['.'],onOk:idx=>cb(idx[0]+idx[1]/10)});
-}
-/* Picker entier simple */
-function pickInt(title,min,max,init,unit,cb,step){
-  step=step||1; const vals=range(min,max,step); const sel=Math.max(0,vals.indexOf(init)); 
-  openPicker({title,cols:[{values:vals,sel:sel<0?0:sel,unit}],onOk:idx=>cb(vals[idx[0]])});
-}
-/* Picker Vitesse km/h (entier.décimale) */
-function pickSpeed(title,init,cb){
-  init=init||12; const whole=Math.floor(init), dec=Math.round((init-whole)*10);
-  openPicker({title:title||'Vitesse',cols:[{values:range(1,40),sel:Math.max(0,whole-1)},{values:range(0,9),sel:dec,unit:'km/h'}],seps:['.'],onOk:idx=>cb((idx[0]+1)+idx[1]/10)});
-}
+function closeOv(id){ $('#'+id).classList.remove('on'); }
 
 /* ---------- NAV ---------- */
 const TITLES={home:['Accueil',''],sport:['Sport','Running & Musculation'],stats:['Statistiques','Tes données réelles'],outils:['Outils','Calculs & timers'],profil:['Profil','']};
@@ -528,10 +299,8 @@ function nav(s){
   btn.classList.add('on');
   const idx=[...$$('.nb')].indexOf(btn);
   $('#nav-pill').style.left='calc('+(idx*20)+'% + 8px)';
-  const subs={home:'',sport:t('sub_sport'),stats:t('sub_stats'),outils:t('sub_outils'),profil:''};
-  $('#tbTitle').textContent=t(s);
-  $('#tbSub').textContent= s==='home'?greet():subs[s];
-  const av=$('#tbAvatar'); if(av){ if(P.photo){ av.style.background='url('+P.photo+') center/cover'; av.textContent=''; } else { av.style.background='var(--ed)'; av.style.color='var(--e)'; av.style.fontWeight='800'; av.textContent=P.name?P.name[0].toUpperCase():'?'; } }
+  $('#tbTitle').textContent=TITLES[s][0];
+  $('#tbSub').textContent= s==='home'?greet():TITLES[s][1];
   $('#scroll').scrollTop=0;
   if(s==='home') renderHome();
   if(s==='sport') renderSport();
@@ -540,15 +309,10 @@ function nav(s){
   if(s==='profil') renderProfile();
 }
 $$('.nb').forEach(b=>b.onclick=()=>nav(b.dataset.s));
-function greet(){ const h=new Date().getHours(); const l=curLang();
-  const G={fr:[h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir'],en:[h<12?'Good morning':h<18?'Good afternoon':'Good evening'],ar:['مرحباً']};
-  return (G[l]||G.fr)[0]+', '+(P.name||t('profil'))+' 👋'; }
+function greet(){ const h=new Date().getHours(); const g=h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir'; return g+', '+(P.name||'Athlète')+' 👋'; }
 
 /* ---------- INIT ---------- */
 function boot(){
-  applyTheme(); // applique le mode (clair/sombre) dès le démarrage
-  checkConnectivity();
-  if(P.notif!==false) ensureNotifPerm();
   $('#nav-pill').style.width='calc(20% - 0px)';
   $('#nav-pill').style.left='calc(0% + 8px)';
   if(!P.setupDone){ startOnboarding(); }
@@ -557,25 +321,10 @@ function boot(){
 function initApp(){
   $('#ob').classList.remove('on');
   applyTheme();
-  document.documentElement.lang=curLang();
-  document.documentElement.dir=(curLang()==='ar')?'rtl':'ltr';
-  applyNavLabels();
   P.vdot=computeVDOTfromRecords()||computeVDOT();
   getDailyGoals();
   refreshXP();
   nav('home');
-  // Reprise automatique d'une séance muscu interrompue
-  setTimeout(maybeResumeLive,600);
-}
-function maybeResumeLive(){
-  const snap=DB.load('live_active'); if(!snap||LIVE) return;
-  const prog=allProgs().find(x=>x.id===snap.progId); if(!prog){ localStorage.removeItem('vvv_live_active'); return; }
-  const mins=Math.round((Date.now()-snap.start)/60000);
-  if(mins>180){ localStorage.removeItem('vvv_live_active'); return; } // trop vieux
-  if(confirm('Une séance « '+prog.name+' » était en cours ('+mins+' min). Reprendre ?')){
-    LIVE={prog,idx:snap.idx,start:snap.start,state:snap.state,tonnage:snap.tonnage,setsDone:snap.setsDone};
-    renderLive(); openOv('ovLive'); liveTimer=setInterval(updateLiveTimer,500); startBgActivity('Séance : '+prog.name);
-  } else { localStorage.removeItem('vvv_live_active'); }
 }
 
 /* ---------- ONBOARDING ---------- */
@@ -587,51 +336,7 @@ function startOnboarding(){
   // pill selectors
   $('#ob_level').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{ $('#ob_level').querySelectorAll('.pill').forEach(x=>x.classList.remove('on')); p.classList.add('on'); });
   $('#ob_days').querySelectorAll('.pill').forEach(p=>p.onclick=()=>p.classList.toggle('on'));
-  OB_PERFS=[{dist:null,meters:null,timeS:null}];
-  renderPerfRows();
   obShow(1);
-}
-/* ===== Étape Performances : lignes Distance | Temps ===== */
-let OB_PERFS=[{dist:null,meters:null,timeS:null}];
-function renderPerfRows(){
-  const box=$('#ob_perfs'); if(!box) return;
-  let h='';
-  OB_PERFS.forEach((p,i)=>{
-    h+='<div class="perfrow">';
-    h+='<div class="perfcard" onclick="pickPerfDist('+i+')"><div class="pcl">🏁 Distance</div><div class="pcv '+(p.dist?'':'empty')+'">'+(p.dist||'Choisir')+'</div></div>';
-    h+='<div class="perfcard" onclick="pickPerfTime('+i+')"><div class="pcl">⏱ Temps</div><div class="pcv '+(p.timeS!=null?'':'empty')+'">'+(p.timeS!=null?fmtTime(p.timeS):'Choisir')+'</div></div>';
-    if(OB_PERFS.length>1) h+='<div class="perfdel" onclick="delPerfRow('+i+')">🗑</div>';
-    h+='</div>';
-  });
-  box.innerHTML=h;
-}
-function addPerfRow(){ OB_PERFS.push({dist:null,meters:null,timeS:null}); renderPerfRows(); }
-function openLevelGuide(){
-  const lv=[
-    ['🌱 Débutant','Tu cours depuis moins d\u2019un an. Tu t\u2019entraînes occasionnellement et tu découvres encore les bases.'],
-    ['🏃 Intermédiaire','Tu cours régulièrement, participes parfois à des compétitions et maîtrises les principaux types de séances.'],
-    ['⚡ Confirmé','Plusieurs années d\u2019entraînement, une pratique structurée et des objectifs chronométriques précis.'],
-    ['🔥 Très avancé','Entraînement intensif, plusieurs compétitions par an, très bon niveau régional ou national.'],
-    ['🏆 Élite','Athlète de haut niveau : performances nationales/internationales, entraînement quotidien à très gros volume.']
-  ];
-  let h=lv.map(x=>'<div class="card" style="margin-bottom:10px;padding:14px"><div style="font-weight:700;font-size:15px;margin-bottom:5px">'+x[0]+'</div><div style="font-size:13px;color:var(--muted);line-height:1.5">'+x[1]+'</div></div>').join('');
-  h+='<button class="btn" onclick="closeOv(\'ovProg\')">Compris 👍</button>';
-  $('#ovProgTitle').textContent='Comment choisir mon niveau ?'; $('#progBody').innerHTML=h;
-  // place l'overlay au-dessus de l'onboarding
-  $('#ovProg').style.zIndex='13700'; openOv('ovProg');
-}
-function delPerfRow(i){ OB_PERFS.splice(i,1); renderPerfRows(); }
-function pickPerfDist(i){
-  const names=REC_DISTANCES.map(d=>d[0]).concat(['Autre']);
-  openPicker({title:'Distance',cols:[{values:names,sel:Math.max(0,names.indexOf(OB_PERFS[i].dist)),wide:true}],onOk:idx=>{
-    const name=names[idx[0]];
-    if(name==='Autre'){ pickDistance('Distance personnalisée',OB_PERFS[i].meters?OB_PERFS[i].meters/1000:5,km=>{ OB_PERFS[i].dist=(km>=1?km+' km':Math.round(km*1000)+' m'); OB_PERFS[i].meters=Math.round(km*1000); renderPerfRows(); }); }
-    else { const d=REC_DISTANCES[idx[0]]; OB_PERFS[i].dist=d[0]; OB_PERFS[i].meters=d[1]; renderPerfRows(); }
-  }});
-}
-function pickPerfTime(i){
-  const m=OB_PERFS[i].meters||5000; const longRace=m>=15000;
-  pickTime('Temps · '+(OB_PERFS[i].dist||''),OB_PERFS[i].timeS!=null?OB_PERFS[i].timeS:(m>=10000?2700:m>=5000?1200:300),v=>{ OB_PERFS[i].timeS=v; renderPerfRows(); },longRace);
 }
 function obShow(n){
   obStep=n;
@@ -647,92 +352,42 @@ $('#obNext').onclick=()=>{
   if(obStep<OB_MAX) obShow(obStep+1);
   else finishOnboarding();
 };
-function obv(id){ const el=$('#'+id); return el.dataset.v!==undefined&&el.classList.contains('pkfield')?el.dataset.v:el.value; }
-function setObPk(id,val,label){ const el=$('#'+id); el.dataset.v=val; el.textContent=label; el.classList.add('set'); }
-function pickWeightOb(){ openPicker({title:'Poids (kg)',cols:[{values:range(30,200),sel:30},{values:range(0,9),sel:0,unit:'kg'}],seps:['.'],onOk:idx=>{ const w=(idx[0]+30)+idx[1]/10; setObPk('ob_w',w,w+' kg'); }}); }
 function obValidate(n){
   if(n===2){ if(!$('#ob_name').value.trim()||!$('#ob_bday').value||!$('#ob_sex').value||!$('#ob_city').value.trim()){ toast('Remplis les champs requis'); return false; } }
-  if(n===3){ if(!obv('ob_h')||!obv('ob_w')){ toast('Taille et poids requis'); return false; } }
-  if(n===4){ if(!$('#ob_level').querySelector('.pill.on')){ toast('Choisis un niveau'); return false; } if(!obv('ob_km')){ toast('Choisis ton volume'); return false; } }
+  if(n===3){ if(!$('#ob_h').value||!$('#ob_w').value){ toast('Taille et poids requis'); return false; } }
+  if(n===4){ if(!$('#ob_level').querySelector('.pill.on')){ toast('Choisis un niveau'); return false; } }
   if(n===5){ if(!$('#ob_goal').value.trim()||!$('#ob_compdate').value){ toast('Objectif et date requis'); return false; } }
-  if(n===6){ const valid=OB_PERFS.filter(p=>p.meters&&p.timeS); if(!valid.length){ toast('Ajoute au moins une performance'); return false; } }
-  if(n===7){ if(!$('#ob_days').querySelector('.pill.on')||!obv('ob_time')){ toast('Jours et temps requis'); return false; } }
+  if(n===6){ if(!$('#ob_5k').value.trim()){ toast('Le chrono 5000m est requis'); return false; } }
+  if(n===7){ if(!$('#ob_days').querySelector('.pill.on')||!$('#ob_time').value){ toast('Jours et temps requis'); return false; } }
   return true;
 }
 function finishOnboarding(){
   const days=[...$('#ob_days').querySelectorAll('.pill.on')].map(p=>+p.dataset.v);
-  // Enregistre les performances saisies
-  const valid=OB_PERFS.filter(p=>p.meters&&p.timeS!=null);
-  RECORDS=valid.map(p=>({dist:p.dist,meters:p.meters,time:fmtTime(p.timeS),date:todayKey()}));
-  const find=m=>{ const r=valid.find(x=>x.meters===m); return r?fmtTime(r.timeS):''; };
   P={
     setupDone:true,
     name:$('#ob_name').value.trim(), bday:$('#ob_bday').value, sex:$('#ob_sex').value, city:$('#ob_city').value.trim(),
-    height:+obv('ob_h'), weight:+obv('ob_w'),
-    level:$('#ob_level').querySelector('.pill.on').dataset.v, kmWeek:+obv('ob_km')||40,
+    height:+$('#ob_h').value, weight:+$('#ob_w').value, hrMax:+$('#ob_hrmax').value||190, hrRest:+$('#ob_hrrest').value||60,
+    level:$('#ob_level').querySelector('.pill.on').dataset.v, kmWeek:+$('#ob_km').value||40,
     goal:$('#ob_goal').value.trim(), compDate:$('#ob_compdate').value,
-    t5k:find(5000), t3k:find(3000), t1500:find(1500), t10k:find(10000),
-    days, sessionTime:+obv('ob_time')||60, coach:$('#ob_coach').value.trim(),
-    theme:'blue', pb5k:find(5000), pb1500:find(1500), pb10k:find(10000)
+    t5k:$('#ob_5k').value.trim(), t3k:$('#ob_3k').value.trim(), t1500:$('#ob_1500').value.trim(), t10k:$('#ob_10k').value.trim(),
+    days, sessionTime:+$('#ob_time').value||60, coach:$('#ob_coach').value.trim(),
+    theme:'blue', pb5k:$('#ob_5k').value.trim(), pb3k:$('#ob_3k').value.trim(), pb1500:$('#ob_1500').value.trim(), pb10k:$('#ob_10k').value.trim()
   };
-  P.vdot=computeVDOTfromRecords()||computeVDOT();
-  DB.save('profile',P); DB.save('records',RECORDS); DB.save('xp',XP);
+  P.vdot=computeVDOT();
+  DB.save('profile',P); DB.save('xp',XP);
   burst();
   setTimeout(initApp,400);
 }
 
 /* ---------- THEME ---------- */
-const THEMES={blue:'#3D7FFF',violet:'#A98CF0',cyan:'#7FE0E8',green:'#33D399',orange:'#FF8A3D',pink:'#FF5C9E'};
-function accentHex(){ return P.theme==='custom'?(P.customColor||'#3D7FFF'):(THEMES[P.theme]||'#3D7FFF'); }
-function effectiveMode(){
-  const m=P.mode||'dark';
-  if(m==='auto') return (window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
-  return m;
-}
+const THEMES={blue:'#3D7FFF',violet:'#A98CF0',cyan:'#7FE0E8'};
 function applyTheme(){
-  const c=accentHex();
+  const c=THEMES[P.theme||'blue'];
   document.documentElement.style.setProperty('--e',c);
   const hex=c.replace('#','');
   const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16);
-  document.documentElement.style.setProperty('--ed','rgba('+r+','+g+','+b+',.'+(effectiveMode()==='light'?'12':'16')+')');
-  const mode=effectiveMode();
-  document.documentElement.setAttribute('data-mode',mode);
-  const meta=document.querySelector('meta[name="theme-color"]'); if(meta) meta.content=mode==='light'?'#F2F4F8':'#0A0D12';
+  document.documentElement.style.setProperty('--ed','rgba('+r+','+g+','+b+',.14)');
 }
-function setTheme(t){ P.theme=t; saveAll(); applyTheme(); if($('#s-profil')&&$('#s-profil').classList.contains('on'))renderProfile(); }
-function setMode(m){ P.mode=m; saveAll(); applyTheme(); if($('#s-profil')&&$('#s-profil').classList.contains('on'))renderProfile(); }
-function toggleSounds(el){ P.sounds=(P.sounds===false); saveAll(); el.classList.toggle('on'); if(P.sounds!==false) sfx('goal'); }
-async function toggleNotif(el){
-  const turningOn = (P.notif===false) || P.notif===undefined ? true : false;
-  if(turningOn){
-    // Demande la permission système
-    if('Notification'in window){
-      let perm=Notification.permission;
-      if(perm==='default'){ try{ perm=await Notification.requestPermission(); }catch(e){} }
-      if(perm==='denied'){ toast('🔕 Notifications bloquées par le téléphone'); return; }
-    } else { toast('Notifications non supportées'); return; }
-    P.notif=true; el.classList.add('on'); saveAll();
-    notify('🔔 Notifications activées','Tu recevras les rappels et l\u2019état de tes activités.');
-    toast('Notifications activées ✓');
-  } else {
-    P.notif=false; el.classList.remove('on'); saveAll(); stopBgActivity(); toast('Notifications désactivées');
-  }
-}
-/* Palette de couleur personnalisée */
-const PALETTE=['#3D7FFF','#5B8DEF','#00C2FF','#1FD3B0','#33D399','#7BD938','#FFD23F','#FF8A3D','#FF6B35','#FF5C6C','#FF5C9E','#C159F0','#A98CF0','#7C5CFF','#E0E6F0','#9FD8FF','#F2B84B','#C97B4A'];
-function openColorPicker(){
-  let h='<div class="tip" style="margin-bottom:14px">Choisis ta couleur d\u2019accent.</div>';
-  h+='<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">';
-  PALETTE.forEach(col=>{ const sel=(P.theme==='custom'&&P.customColor===col); h+='<div onclick="applyCustomColor(\''+col+'\')" style="aspect-ratio:1;border-radius:50%;background:'+col+';cursor:pointer;border:3px solid '+(sel?'var(--snow)':'transparent')+';box-shadow:0 0 0 1px var(--hair)"></div>'; });
-  h+='</div>';
-  h+='<div class="field"><label>Couleur sur-mesure</label><input type="color" id="customColorInp" value="'+(P.customColor||'#3D7FFF')+'" style="width:100%;height:48px;border:1px solid var(--hair);border-radius:12px;background:var(--s2);cursor:pointer"></div>';
-  h+='<button class="btn" onclick="applyCustomColor(document.getElementById(\'customColorInp\').value)">✓ Appliquer</button>';
-  $('#ovProgTitle').textContent='Palette de couleurs'; $('#progBody').innerHTML=h; $('#ovProg').style.zIndex='13700'; openOv('ovProg');
-  const inp=$('#customColorInp'); if(inp) inp.oninput=()=>{ P.theme='custom'; P.customColor=inp.value; applyTheme(); };
-}
-function applyCustomColor(col){ P.theme='custom'; P.customColor=col; saveAll(); applyTheme(); closeOv('ovProg'); renderProfile(); toast('Couleur appliquée ✓'); }
-// suit le thème du téléphone en mode auto
-if(window.matchMedia){ try{ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change',()=>{ if((P.mode||'dark')==='auto') applyTheme(); }); }catch(e){} }
 
 /* ---------- EXERCISE LIBRARY (100+) ---------- */
 const LIB=[
@@ -950,57 +605,12 @@ const XDATA=[
  ['Turkish Get-up','Corps entier','Kettlebell','Avancé',['Corps entier'],['Abdominaux'],'🔔']
 ];
 // Construit la fiche tutoriel détaillée d'un exercice
-/* ============ DÉMONSTRATIONS VIDÉO/GIF (free-exercise-db, domaine public) ============
-   Source: github.com/yuhonas/free-exercise-db (The Unlicense — libre de droits).
-   Chaque exercice a 2 images (0.jpg départ, 1.jpg fin) ; on les alterne pour
-   créer une animation type GIF du mouvement. */
-const EXDB_BASE='https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
-const EXDB_MAP={
- 'Bench Press':'Barbell_Bench_Press_-_Medium_Grip','Développé couché barre':'Barbell_Bench_Press_-_Medium_Grip',
- 'Développé incliné barre':'Barbell_Incline_Bench_Press_-_Medium_Grip','Développé incliné haltères':'Incline_Dumbbell_Press',
- 'Développé couché haltères':'Dumbbell_Bench_Press','Decline Bench Press':'Decline_Barbell_Bench_Press','Développé décliné barre':'Decline_Barbell_Bench_Press',
- 'Écarté couché haltères':'Dumbbell_Flyes','Écarté incliné haltères':'Incline_Dumbbell_Flyes','Lever Seated Fly':'Butterfly',
- 'Pec Deck (machine)':'Butterfly','Cable Crossover':'Cable_Crossover','Crossover poulie':'Cable_Crossover','Écarté poulie haute':'Cable_Crossover',
- 'Pompes':'Pushups','Push Up':'Pushups','Pompes diamant':'Push-Ups_-_Close_Triceps_Position','Pompes déclinées':'Decline_Push-Up',
- 'Dips pectoraux':'Dips_-_Chest_Version','Dips pectoraux ':'Dips_-_Chest_Version','Pullover haltère':'Bent-Arm_Dumbbell_Pullover','Dumbbell Pullover':'Bent-Arm_Dumbbell_Pullover',
- 'Soulevé de terre':'Barbell_Deadlift','Deadlift':'Barbell_Deadlift','Soulevé de terre roumain':'Romanian_Deadlift',
- 'Rowing barre buste penché':'Bent_Over_Barbell_Row','Bent Over Row':'Bent_Over_Barbell_Row','Rowing T-bar':'T-Bar_Row_with_Handle','Lever Lying T-bar Row':'T-Bar_Row_with_Handle',
- 'Rowing haltère unilatéral':'One-Arm_Dumbbell_Row','Single Arm Dumbbell Row':'One-Arm_Dumbbell_Row','Rowing poulie basse':'Seated_Cable_Rows','Straight Back Seated Row':'Seated_Cable_Rows','Rowing machine assise':'Seated_Cable_Rows',
- 'Tirage vertical poulie':'Wide-Grip_Lat_Pulldown','Bar Lateral Pulldown':'Wide-Grip_Lat_Pulldown','Tirage nuque':'Wide-Grip_Rear_Pull-Up',
- 'Tractions pronation':'Pullups','Pull Up':'Pullups','Tractions supination':'Chin-Up','Pull-over poulie':'Straight-Arm_Pulldown',
- 'Good Morning':'Good_Morning','Hyperextension lombaire':'Hyperextensions_-_Back_Extensions','45° One Leg Hyperextension':'Hyperextensions_-_Back_Extensions','Superman au sol':'Superman',
- 'Développé militaire barre':'Standing_Military_Press','Développé haltères assis':'Dumbbell_Shoulder_Press','Seated Shoulder Press':'Dumbbell_Shoulder_Press','Développé Arnold':'Arnold_Dumbbell_Press','Développé machine épaules':'Machine_Shoulder_(Military)_Press','Lever Seated Shoulder Press':'Machine_Shoulder_(Military)_Press',
- 'Élévations latérales':'Side_Lateral_Raise','Lateral Raise':'Side_Lateral_Raise','Élévations latérales poulie':'Cable_Seated_Lateral_Raise',
- 'Élévations frontales':'Front_Dumbbell_Raise','Front Raise':'Front_Dumbbell_Raise','Oiseau (rear delt)':'Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench','Lever Reverse Fly':'Reverse_Machine_Flyes',
- 'Face Pull poulie':'Face_Pull','Cable Face Pull':'Face_Pull','Rowing menton':'Upright_Barbell_Row','Upright Row':'Upright_Barbell_Row',
- 'Shrug barre':'Barbell_Shrug','Shrug haltères':'Dumbbell_Shrug',
- 'Curl barre EZ':'Barbell_Curl','Biceps Curl':'Barbell_Curl','Curl haltères':'Dumbbell_Bicep_Curl','Curl marteau':'Hammer_Curls','Hammer Curl':'Hammer_Curls',
- 'Curl incliné':'Incline_Dumbbell_Curl','Curl concentré':'Concentration_Curls','Curl pupitre (Preacher)':'Preacher_Curl','Lever Preacher Curl':'Preacher_Curl','Curl poulie basse':'Cable_Hammer_Curls_-_Rope_Attachment',
- 'Barre au front (Skull Crusher)':'Lying_Triceps_Press','Skull Crusher':'Lying_Triceps_Press','Extension poulie haute':'Triceps_Pushdown','Triceps Pushdown':'Triceps_Pushdown','Extension poulie corde':'Triceps_Pushdown_-_Rope_Attachment',
- 'Extension nuque haltère':'Seated_Triceps_Press','Kickback haltère':'Tricep_Dumbbell_Kickback','Dips entre bancs':'Bench_Dips','Elbow Dips':'Bench_Dips','Développé couché serré':'Close-Grip_Barbell_Bench_Press',
- 'Curl poignets':'Palms-Down_Wrist_Curl_Over_A_Bench','Curl poignets inversé':'Palms-Up_Barbell_Wrist_Curl_Over_A_Bench','Marche du fermier':'Farmers_Walk','Farmer Walk':'Farmers_Walk',
- 'Crunch':'Crunches','Crunch poulie':'Cable_Crunch','Cable Crunch':'Cable_Crunch','Relevé de jambes suspendu':'Hanging_Leg_Raise','Hanging Leg Raise':'Hanging_Leg_Raise','Relevé de jambes au sol':'Flat_Bench_Lying_Leg_Raise',
- 'Planche':'Plank','Plank':'Plank','Russian Twist':'Russian_Twist','Roulette abdominale':'Ab_Roller','Ab Wheel Rollout':'Ab_Roller','Mountain Climbers':'Mountain_Climbers',
- 'Hip Thrust barre':'Barbell_Hip_Thrust','Hip Thrust':'Barbell_Hip_Thrust','Lever Hip Thrust':'Barbell_Hip_Thrust','Pont fessier':'Butt_Lift_(Bridge)','Glute Bridge':'Butt_Lift_(Bridge)',
- 'Abduction machine':'Thigh_Abductor','Lever Seated Hip Abduction':'Thigh_Abductor','Adduction machine':'Thigh_Adductor','Lever Seated Hip Adduction':'Thigh_Adductor','Fentes bulgares':'Dumbbell_Lunges','Bulgarian Split Squat':'Dumbbell_Lunges',
- 'Squat barre':'Barbell_Full_Squat','Back Squat':'Barbell_Full_Squat','Front Squat':'Front_Barbell_Squat','Squat Smith':'Smith_Machine_Squat','Smith Squat':'Smith_Machine_Squat',
- 'Presse à cuisses':'Leg_Press','Sled 45° Leg Press':'Leg_Press','Sled 45° Leg Wide Press':'Leg_Press','Hack Squat':'Hack_Squat','Leg Extension':'Leg_Extensions','Lever Leg Extension':'Leg_Extensions','Lever Seated Leg Extension':'Leg_Extensions',
- 'Fentes avant':'Dumbbell_Lunges','Fentes marchées':'Dumbbell_Walking_Lunge','Walking Lunge':'Dumbbell_Walking_Lunge','Dumbbell Split Squat':'Dumbbell_Lunges','Goblet Squat':'Goblet_Squat','Squat poids du corps':'Bodyweight_Squat',
- 'Leg Curl allongé':'Lying_Leg_Curls','Lever Lying Leg Curl':'Lying_Leg_Curls','Leg Curl assis':'Seated_Leg_Curl','Lever Kneeling Leg Curl':'Standing_Leg_Curl','Nordic Curl':'Lying_Leg_Curls','Nordic Hamstring Curl':'Lying_Leg_Curls','Soulevé jambes tendues haltères':'Stiff-Legged_Dumbbell_Deadlift',
- 'Mollets debout':'Standing_Calf_Raises','Standing Calf Raise':'Standing_Calf_Raises','Mollets assis':'Seated_Calf_Raise','Lever Seated Calf Raise':'Seated_Calf_Raise','Lever Seated One Leg Calf Raise':'Seated_Calf_Raise','Mollets à la presse':'Calf_Press_On_The_Leg_Press_Machine',
- 'Burpees':'Burpee','Thruster':'Thrusters','Clean & Press':'Clean_and_Press','Kettlebell Swing':'Kettlebell_One-Legged_Deadlift','EZ-bar 21s':'Barbell_Curl'
-};
-function exGif(name){
-  const id=EXDB_MAP[name]; if(!id) return null;
-  return [EXDB_BASE+id+'/0.jpg', EXDB_BASE+id+'/1.jpg'];
-}
 function exMeta(name){
   const d=XDATA.find(x=>x[0]===name);
   let base;
   if(d){ base={name:d[0],group:d[1],equip:d[2],level:d[3],primary:d[4],secondary:d[5],anim:d[6]}; }
   else { const o=LIB.find(e=>e.name===name); if(!o) return null;
     base={name:o.name,group:(o.muscles&&o.muscles[0])||'Corps entier',equip:'Machine',level:'Intermédiaire',primary:o.muscles||[],secondary:[],anim:o.anim||'🏋️',tip:o.tip}; }
-  base.gif=exGif(name);
   return enrichFiche(base);
 }
 function enrichFiche(b){
@@ -1484,8 +1094,8 @@ function toggleGoal(id){
   // Recalcul COMPLET : cocher ajoute, décocher retire automatiquement
   refreshXP({animate:true});
   const isAll=GOALS.list.every(x=>x.done);
-  if(g.done && isAll && !wasAll){ burst(); sfx('finish'); toast('🎉 Tous les objectifs ! +'+XP_RULES.allGoalsBonus+' XP'); }
-  else if(g.done){ sfx('goal'); toast('+'+XP_RULES.perGoal+' XP'); }
+  if(g.done && isAll && !wasAll){ burst(); toast('🎉 Tous les objectifs ! +'+XP_RULES.allGoalsBonus+' XP'); }
+  else if(g.done) toast('+'+XP_RULES.perGoal+' XP');
   else toast('−'+XP_RULES.perGoal+' XP');
   renderHome();
 }
@@ -1846,198 +1456,76 @@ function renderMuscu(){
   return h;
 }
 function delProg(id){ if(!confirm('Supprimer ce programme ?'))return; CUSTOM=CUSTOM.filter(p=>p.id!==id); saveAll(); renderSport(); }
-/* ===== VUE ROUTINE (style Hevy) ===== */
-function exThumb(name,size){
-  const g=exGif(name); size=size||64;
-  if(g) return '<div style="width:'+size+'px;height:'+size+'px;border-radius:12px;background:#0c0f15 url('+g[0]+') center/cover;flex-shrink:0;border:1px solid var(--hair)"></div>';
-  const e=findEx(name);
-  return '<div style="width:'+size+'px;height:'+size+'px;border-radius:12px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;border:1px solid var(--hair)">'+((e&&e.anim)||'🏋️')+'</div>';
-}
-function progDuration(p){ return p.ex.reduce((a,e)=>a+e.sets*1.8,0); } // estimation min
 function openProg(id){
   const p=allProgs().find(x=>x.id===id); if(!p) return;
-  $('#ovProgTitle').textContent='Routine';
-  const totalSets=p.ex.reduce((a,e)=>a+(e.sets||0),0);
-  const dur=Math.round(progDuration(p));
-  const lvl=p.objective||'Intermédiaire';
-  let h='<div class="row" style="margin-bottom:6px"><div class="man" style="font-weight:800;font-size:22px">'+(p.icon?p.icon+' ':'')+p.name+'</div></div>';
-  h+='<div class="row" style="gap:8px;margin-bottom:14px"><span class="badge">'+lvl+'</span><span style="font-size:12px;color:var(--muted)">⏱ '+p.ex.length+' exercices</span></div>';
-  // Carte stats
-  h+='<div class="card" style="padding:0;overflow:hidden"><div style="display:flex;text-align:center">'+
-    '<div style="flex:1;padding:14px 6px;border-right:1px solid var(--hair)"><div class="lab" style="margin:0 0 4px">Exercices</div><div class="man" style="font-weight:800;font-size:20px;color:var(--e)">'+p.ex.length+'</div></div>'+
-    '<div style="flex:1;padding:14px 6px;border-right:1px solid var(--hair)"><div class="lab" style="margin:0 0 4px">Séries</div><div class="man" style="font-weight:800;font-size:20px">'+totalSets+'</div></div>'+
-    '<div style="flex:1.3;padding:14px 6px"><div class="lab" style="margin:0 0 4px">Durée est.</div><div class="man" style="font-weight:800;font-size:20px">~'+dur+' min</div></div></div></div>';
-  // Liste d'exercices avec vignette + numéro
+  $('#ovProgTitle').textContent=p.name;
+  let h='';
+  if(p.objective) h+='<div class="badge" style="margin-bottom:14px">'+p.objective+'</div>';
   p.ex.forEach((e,i)=>{
-    h+='<div class="card" style="padding:13px;margin-bottom:10px;cursor:pointer" onclick="openExDetail(\''+p.id+'\','+i+')"><div class="row" style="align-items:flex-start"><div style="position:relative;margin-right:12px">'+exThumb(e.name,64)+
-      '<div style="position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:7px;background:var(--e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">'+(i+1)+'</div></div>'+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px;line-height:1.25">'+e.name+'</div>'+
-      '<div class="muscle-tags" style="margin-top:5px">'+(e.muscles||[]).slice(0,2).map(m=>'<span class="mtag">'+m+'</span>').join('')+'</div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-top:6px">'+e.sets+' séries · '+e.reps+' reps</div>'+
-      '<div style="font-size:11px;color:var(--dim);margin-top:3px">⏱ ~'+Math.round(e.sets*1.8)+' min</div></div>'+
-      '<span style="color:var(--dim);font-size:18px;align-self:center">›</span></div></div>';
+    h+='<div class="card" style="margin-bottom:10px"><div class="row"><div style="font-size:26px">'+e.anim+'</div><div style="flex:1;margin-left:10px"><div style="font-weight:700;font-size:14px">'+e.name+'</div><div class="mono" style="font-size:12px;color:var(--e);margin-top:2px">'+e.sets+' × '+e.reps+'</div><div class="muscle-tags">'+(e.muscles||[]).map(m=>'<span class="mtag">'+m+'</span>').join('')+'</div></div></div>'+(e.tip?'<div class="tip" style="margin-top:10px">💡 '+e.tip+'</div>':'')+'</div>';
   });
-  h+='<button class="btn ghost" style="margin:4px 0 12px" onclick="openLibFor(addExToProg.bind(null,\''+p.id+'\'))">＋ Ajouter un exercice</button>';
-  h+='<button class="btn" style="position:sticky;bottom:8px" onclick="startLive(\''+p.id+'\')">▶ Commencer l\u2019entraînement</button>';
+  h+='<button class="btn" style="margin-top:8px" onclick="startLive(\''+p.id+'\')">▶ Démarrer la séance</button>';
   $('#progBody').innerHTML=h;
   openOv('ovProg');
-}
-function addExToProg(progId,e){
-  const p=allProgs().find(x=>x.id===progId); if(!p)return;
-  if(!p.kind){ toast('Les programmes par défaut ne sont pas modifiables'); return; }
-  closeOv('ovLib'); openCfg(e,(cfg)=>{ p.ex.push(cfg); saveAll(); openProg(progId); });
-}
-/* ===== VUE EXERCICE DÉTAILLÉE (onglets) ===== */
-let exDetailTab='exo', exDetailCtx=null;
-function openExDetail(progId,idx){
-  exDetailCtx={progId,idx}; exDetailTab='exo';
-  renderExDetail();
-}
-function renderExDetail(){
-  const p=allProgs().find(x=>x.id===exDetailCtx.progId); const e=p.ex[exDetailCtx.idx];
-  const f=exMeta(e.name)||{primary:e.muscles||[],secondary:[],steps:[],tips:[],mistakes:[],safety:[],equip:'',level:''};
-  $('#ovProgTitle').textContent=e.name;
-  const g=exGif(e.name);
-  let h='<div class="pills" style="margin-bottom:14px;overflow-x:auto;flex-wrap:nowrap">'+
-    [['exo','Exercice'],['muscles','Muscles'],['instr','Instructions'],['tips','Conseils']].map(t=>'<div class="pill '+(exDetailTab===t[0]?'on':'')+'" onclick="exDetailTab=\''+t[0]+'\';renderExDetail()">'+t[1]+'</div>').join('')+'</div>';
-  // Média animé
-  if(g){
-    h+='<div style="position:relative;background:#0c0f15;border:1px solid var(--hair);border-radius:16px;overflow:hidden;margin-bottom:14px"><img id="exDemo" src="'+g[0]+'" style="width:100%;display:block;aspect-ratio:16/11;object-fit:cover"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center" onclick="toggleExDemo()"><div id="exPlayBtn" style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;backdrop-filter:blur(4px)">▶</div></div></div>';
-  } else {
-    h+='<div style="background:linear-gradient(135deg,var(--s2),var(--s1));border:1px solid var(--hair);border-radius:16px;padding:36px;text-align:center;margin-bottom:14px"><div style="font-size:64px;animation:demoFloat 1.5s infinite">'+(e.anim||'🏋️')+'</div></div>';
-  }
-  if(exDetailTab==='exo'){
-    h+='<div class="card"><div class="card-t">À propos de l\u2019exercice</div><div style="font-size:13px;color:var(--muted);line-height:1.55">Le <b style="color:var(--snow)">'+e.name+'</b> sollicite principalement '+((f.primary||[]).join(', ')||'plusieurs groupes musculaires')+(f.secondary&&f.secondary.length?', ainsi que '+f.secondary.join(', ')+' en secondaire':'')+'.</div></div>';
-    // Repos
-    h+='<div class="card"><div class="row"><div class="row" style="gap:10px"><span style="font-size:18px">⏱</span><div><div style="font-size:11px;color:var(--muted)">Repos entre les séries</div><div style="font-weight:700">'+(e.rest||90)+'s</div></div></div></div></div>';
-    // mini stats
-    const vol=(e.sets||3)*(parseInt(e.reps)||10)*(e.weight||0);
-    h+='<div class="card" style="padding:0;overflow:hidden"><div style="display:flex;text-align:center"><div style="flex:1;padding:13px 4px;border-right:1px solid var(--hair)"><div class="lab" style="margin:0">Séries</div><div class="man" style="font-weight:800;font-size:18px">'+e.sets+'</div></div><div style="flex:1;padding:13px 4px;border-right:1px solid var(--hair)"><div class="lab" style="margin:0">Volume</div><div class="man" style="font-weight:800;font-size:18px">'+vol+' kg</div></div><div style="flex:1;padding:13px 4px"><div class="lab" style="margin:0">Durée</div><div class="man" style="font-weight:800;font-size:18px">~'+Math.round(e.sets*1.8)+'min</div></div></div></div>';
-  } else if(exDetailTab==='muscles'){
-    h+='<div class="card"><div class="card-t">🎯 Muscles principaux</div><div class="muscle-tags">'+(f.primary||[]).map(m=>'<span class="mtag" style="background:var(--ed);color:var(--e);border-color:var(--e)">'+m+'</span>').join('')+'</div>';
-    if(f.secondary&&f.secondary.length) h+='<div class="card-t" style="margin-top:14px">Muscles secondaires</div><div class="muscle-tags">'+f.secondary.map(m=>'<span class="mtag">'+m+'</span>').join('')+'</div>';
-    h+='</div>';
-    if(f.equip) h+='<div class="card"><div class="row"><span class="lab">Matériel</span><span style="font-weight:600">'+f.equip+'</span></div></div>';
-  } else if(exDetailTab==='instr'){
-    h+='<div class="card"><div class="card-t">📋 Exécution</div>'+((f.steps&&f.steps.length)?f.steps.map((s,i)=>'<div class="tip" style="margin-bottom:6px"><b style="color:var(--e)">'+(i+1)+'.</b> '+s+'</div>').join(''):'<div style="font-size:13px;color:var(--muted)">Réalise le mouvement de façon contrôlée, amplitude complète.</div>')+'</div>';
-    if(f.breathing) h+='<div class="card"><div class="card-t">🌬️ Respiration</div><div class="tip">'+f.breathing+'</div></div>';
-  } else {
-    if(f.tips&&f.tips.length) h+='<div class="card"><div class="card-t">✅ Conseils</div>'+f.tips.map(x=>'<div class="tip" style="margin-bottom:6px">'+x+'</div>').join('')+'</div>';
-    if(f.mistakes&&f.mistakes.length) h+='<div class="card"><div class="card-t" style="color:var(--bad)">⚠️ Erreurs fréquentes</div>'+f.mistakes.map(x=>'<div class="tip" style="margin-bottom:6px;border-color:rgba(255,92,108,.3);background:rgba(255,92,108,.08)">✗ '+x+'</div>').join('')+'</div>';
-    if(f.safety&&f.safety.length) h+='<div class="card"><div class="card-t">🛡️ Sécurité</div>'+f.safety.map(x=>'<div class="tip" style="margin-bottom:6px;border-color:rgba(51,211,153,.3);background:rgba(51,211,153,.08)">'+x+'</div>').join('')+'</div>';
-  }
-  h+='<div class="row" style="gap:10px;margin-top:8px"><button class="btn ghost" onclick="openProg(\''+exDetailCtx.progId+'\')">‹ Retour</button><button class="btn" onclick="startLive(\''+exDetailCtx.progId+'\','+exDetailCtx.idx+')">▶ Démarrer</button></div>';
-  $('#progBody').innerHTML=h;
-  openOv('ovProg');
-}
-let _exDemo2=null;
-function toggleExDemo(){
-  const g=exGif(allProgs().find(x=>x.id===exDetailCtx.progId).ex[exDetailCtx.idx].name); if(!g)return;
-  const img=$('#exDemo'), btn=$('#exPlayBtn');
-  if(_exDemo2){ clearInterval(_exDemo2); _exDemo2=null; if(btn)btn.textContent='▶'; return; }
-  g.forEach(s=>{const im=new Image();im.src=s;}); let i=0;
-  if(btn)btn.textContent='⏸';
-  _exDemo2=setInterval(()=>{ const im=$('#exDemo'); if(!im){clearInterval(_exDemo2);_exDemo2=null;return;} i=1-i; im.src=g[i]; },650);
 }
 
 /* ---------- LIVE MUSCU SESSION ---------- */
 let LIVE=null,liveTimer=null,restTimer=null;
-function startLive(id,startIdx){
+function startLive(id){
   const p=allProgs().find(x=>x.id===id); if(!p) return;
-  if(_exDemo2){ clearInterval(_exDemo2); _exDemo2=null; }
   closeOv('ovProg');
-  LIVE={prog:p,idx:startIdx||0,start:Date.now(),
-    state:p.ex.map(e=>({weight:e.weight||20,reps:parseInt(e.reps)||10,sets:Array.from({length:e.sets},()=>false),log:[]})),
+  LIVE={prog:p,idx:0,start:Date.now(),
+    state:p.ex.map(e=>({weight:20,reps:parseInt(e.reps)||10,sets:Array.from({length:e.sets},()=>false)})),
     tonnage:0,setsDone:0};
   renderLive(); openOv('ovLive');
   liveTimer=setInterval(updateLiveTimer,500);
-  sfx('start'); startBgActivity('Séance : '+p.name);
 }
 function updateLiveTimer(){
   if(!LIVE) return;
-  const el=$('#liveTime'); if(el) el.textContent=fmtTime((Date.now()-LIVE.start)/1000);
-  // Sauvegarde continue → la séance survit même si l'app est fermée/rechargée
-  persistLive();
-}
-function persistLive(){
-  if(!LIVE) return;
-  const snap={progId:LIVE.prog.id,idx:LIVE.idx,start:LIVE.start,state:LIVE.state,tonnage:LIVE.tonnage,setsDone:LIVE.setsDone};
-  DB.save('live_active',snap);
+  const el=$('#liveTime'); if(!el) return;
+  el.textContent=fmtTime((Date.now()-LIVE.start)/1000);
 }
 function renderLive(){
   const p=LIVE.prog, e=p.ex[LIVE.idx], st=LIVE.state[LIVE.idx];
-  if(!st.log||st.log.length!==st.sets.length){ st.log=st.sets.map((d,i)=>(st.log&&st.log[i])||{kg:e.weight||st.weight||20,reps:parseInt(e.reps)||st.reps||10,rpe:8,done:!!d}); }
-  $('#liveTitle').textContent=e.name;
+  $('#liveTitle').textContent=p.name;
   const totalSets=p.ex.reduce((a,x)=>a+x.sets,0);
   const prog=LIVE.setsDone/totalSets*100;
-  const g=exGif(e.name);
-  // Header : temps + progression + pastilles
-  let h='<div class="row" style="margin-bottom:10px"><span class="mono" id="liveTime" style="font-size:17px;font-weight:700;color:var(--e)">0:00</span><div style="display:flex;gap:6px"><button class="btn ghost sm" style="width:auto;padding:6px 10px" onclick="pauseLive()">⏸ Plus tard</button><span class="lab" style="align-self:center">'+(LIVE.idx+1)+'/'+p.ex.length+'</span></div></div>';
+  let h='<div class="row" style="margin-bottom:10px"><span class="mono" id="liveTime" style="font-size:18px;font-weight:700">0:00</span><div style="display:flex;gap:6px"><button class="btn ghost sm" style="width:auto;padding:6px 10px" onclick="pauseLive()">⏸ Reprendre +tard</button><span class="lab" style="align-self:center">'+(LIVE.idx+1)+'/'+p.ex.length+'</span></div></div>';
   h+='<div class="pbar" style="margin-bottom:12px"><div style="width:'+prog+'%"></div></div>';
-  h+='<div style="display:flex;gap:5px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px">';
+  // Aperçu : barre de pastilles pour sauter à n'importe quel exercice
+  h+='<div style="display:flex;gap:5px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px">';
   p.ex.forEach((ex2,i)=>{ const allDone=LIVE.state[i].sets.every(x=>x); const cur=i===LIVE.idx;
-    h+='<div onclick="jumpLive('+i+')" style="flex-shrink:0;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;cursor:pointer;border:1px solid '+(cur?'var(--e)':'var(--hair)')+';background:'+(cur?'var(--ed)':allDone?'rgba(51,211,153,.18)':'var(--s2)')+';color:'+(allDone?'var(--ok)':cur?'var(--e)':'var(--muted)')+'">'+(allDone&&!cur?'✓':(i+1))+'</div>'; });
+    h+='<div onclick="jumpLive('+i+')" style="flex-shrink:0;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;border:1px solid '+(cur?'var(--e)':'var(--hair)')+';background:'+(cur?'var(--ed)':allDone?'rgba(51,211,153,.18)':'var(--s2)')+'">'+(allDone&&!cur?'✓':ex2.anim)+'</div>'; });
   h+='</div>';
-  // Média
-  if(g){ h+='<div style="position:relative;background:#0c0f15;border:1px solid var(--hair);border-radius:14px;overflow:hidden;margin-bottom:12px"><img id="exDemo" src="'+g[0]+'" style="width:100%;display:block;aspect-ratio:16/10;object-fit:cover"><div onclick="toggleExDemoLive()" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><div id="exPlayBtn" style="width:50px;height:50px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;backdrop-filter:blur(4px)">▶</div></div></div>'; }
-  // Repos
-  h+='<div class="card" style="padding:12px;margin-bottom:10px"><div class="row"><div class="row" style="gap:10px"><span style="font-size:16px">⏱</span><div><div style="font-size:11px;color:var(--muted)">Repos entre séries</div><div style="font-weight:700">'+(e.rest||90)+'s</div></div></div><span style="color:var(--e);font-size:12px;cursor:pointer" onclick="changeRest()">Modifier</span></div></div>';
-  // Tableau Séries effectuées
-  h+='<div class="card" style="padding:14px"><div class="card-t" style="margin-bottom:10px">Séries effectuées</div>';
-  h+='<div style="display:grid;grid-template-columns:38px 1fr 1fr 1fr 44px;gap:6px;font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:8px;text-align:center"><div>Série</div><div>KG</div><div>RÉPS</div><div>RPE</div><div>✓</div></div>';
-  st.log.forEach((s,i)=>{
-    h+='<div style="display:grid;grid-template-columns:38px 1fr 1fr 1fr 44px;gap:6px;align-items:center;margin-bottom:7px">'+
-      '<div style="text-align:center;font-weight:700;color:var(--muted)">'+(i+1)+'</div>'+
-      '<input class="setcell" type="number" inputmode="decimal" value="'+s.kg+'" onchange="setLog('+i+',\'kg\',this.value)">'+
-      '<input class="setcell" type="number" inputmode="numeric" value="'+s.reps+'" onchange="setLog('+i+',\'reps\',this.value)">'+
-      '<input class="setcell" type="number" inputmode="numeric" value="'+s.rpe+'" onchange="setLog('+i+',\'rpe\',this.value)">'+
-      '<div onclick="toggleSet('+i+')" style="width:34px;height:34px;border-radius:50%;margin:0 auto;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(s.done?'var(--e)':'var(--s2)')+';border:1px solid '+(s.done?'var(--e)':'var(--hair)')+';color:#fff;font-size:15px">'+(s.done?'✓':'')+'</div></div>';
+  h+='<div style="text-align:center;margin-bottom:16px"><div style="font-size:54px">'+e.anim+'</div><div class="man" style="font-weight:800;font-size:20px;margin-top:6px">'+e.name+'</div><div class="muscle-tags" style="justify-content:center;margin-top:8px">'+(e.muscles||[]).map(m=>'<span class="mtag">'+m+'</span>').join('')+'</div></div>';
+  if(e.tip) h+='<div class="tip" style="margin-bottom:16px">💡 '+e.tip+'</div>';
+  // steppers
+  h+='<div class="row" style="gap:12px;margin-bottom:16px">'+
+    '<div style="flex:1"><div class="lab" style="text-align:center;margin-bottom:6px">Charge (kg)</div><div class="stepper"><button onclick="liveAdj(\'weight\',-2.5)">−</button><button onclick="liveAdj(\'weight\',-5)" style="font-size:12px">−5</button><span class="val" id="lvW">'+st.weight+'</span><button onclick="liveAdj(\'weight\',5)" style="font-size:12px">+5</button><button onclick="liveAdj(\'weight\',2.5)">+</button></div></div>'+
+    '</div>';
+  h+='<div class="row" style="gap:12px;margin-bottom:16px"><div style="flex:1"><div class="lab" style="text-align:center;margin-bottom:6px">Répétitions</div><div class="stepper"><button onclick="liveAdj(\'reps\',-2)" style="font-size:12px">−2</button><button onclick="liveAdj(\'reps\',-1)">−</button><span class="val" id="lvR">'+st.reps+'</span><button onclick="liveAdj(\'reps\',1)">+</button><button onclick="liveAdj(\'reps\',2)" style="font-size:12px">+2</button></div></div></div>';
+  // sets list
+  h+='<div class="lab" style="margin-bottom:8px">Séries ('+e.reps+' visé)</div>';
+  st.sets.forEach((done,i)=>{
+    h+='<div class="chk '+(done?'done':'')+'" onclick="toggleSet('+i+')"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div><div class="txt" style="flex:1">Série '+(i+1)+'</div><span class="mono" style="color:var(--muted);font-size:13px">'+st.weight+'kg × '+st.reps+'</span></div>';
   });
-  h+='<button class="btn ghost sm" style="margin-top:6px" onclick="addLiveSet()">＋ Ajouter une série</button></div>';
-  // Notes
-  h+='<div class="card" style="padding:14px"><div class="row" style="margin-bottom:6px"><span class="lab" style="margin:0">Notes (optionnel)</span><span style="color:var(--e)">✎</span></div><textarea class="inp" rows="2" placeholder="Comment s\u2019est passée cette série ?" oninput="LIVE.state['+LIVE.idx+'].note=this.value">'+(st.note||'')+'</textarea></div>';
-  // Progression (mini graphe basé sur l'historique)
-  h+=liveProgressChart(e.name);
-  // Actions
-  h+='<div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost sm" onclick="liveNav(-1)" '+(LIVE.idx===0?'disabled style="opacity:.4"':'')+'>◀</button>';
-  h+='<button class="btn ghost sm" onclick="skipExercise()">Passer</button>';
-  if(LIVE.idx<p.ex.length-1) h+='<button class="btn sm" onclick="liveNav(1)">Exercice suivant ▶</button>';
-  else h+='<button class="btn sm" onclick="finishLive()" style="background:linear-gradient(135deg,var(--e),#6FA0FF)">🏁 Terminer</button>';
+  h+='<button class="btn" style="margin-top:14px" onclick="validSet()">✓ Valider série</button>';
+  h+='<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" onclick="liveNav(-1)" '+(LIVE.idx===0?'disabled style="opacity:.4"':'')+'>◀ Préc</button>';
+  h+='<button class="btn ghost sm" onclick="skipExercise()">⤳ Passer</button>';
+  if(LIVE.idx<p.ex.length-1) h+='<button class="btn ghost sm" onclick="liveNav(1)">Suiv ▶</button>';
+  else h+='<button class="btn sm" onclick="finishLive()" style="background:var(--ok)">🏁 Terminer</button>';
   h+='</div>';
-  h+='<button class="btn" style="margin-top:8px;background:var(--ok)" onclick="finishLive()">✓ Terminer l\u2019exercice</button>';
+  h+='<button class="btn sm" style="margin-top:8px;background:var(--ok)" onclick="finishLive()">🏁 Terminer la séance</button>';
   $('#liveBody').innerHTML=h;
 }
-function liveProgressChart(name){
-  // historique des volumes pour cet exercice
-  const hist=(PREFS.exHist&&PREFS.exHist[name])||[];
-  if(hist.length<2) return '<div class="card" style="padding:14px"><div class="card-t">Progression</div><div style="font-size:12px;color:var(--dim)">L\u2019historique de progression apparaîtra après quelques séances.</div></div>';
-  const data=hist.slice(-8).map(x=>x.vol); const min=Math.min(...data),max=Math.max(...data),rng=(max-min)||1;
-  const W=300,H=80; const pts=data.map((v,i)=>(i/(data.length-1)*W).toFixed(0)+','+(H-(v-min)/rng*H).toFixed(0));
-  const best=Math.max(...hist.map(x=>x.vol)), avg=Math.round(hist.reduce((a,x)=>a+x.vol,0)/hist.length);
-  const prog=hist.length>=2?Math.round((data[data.length-1]-data[0])/(data[0]||1)*100):0;
-  let h='<div class="card" style="padding:14px"><div class="card-t">📈 Progression</div>';
-  h+='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:80px"><polyline points="'+pts.join(' ')+'" fill="none" stroke="var(--e)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  h+='<div style="display:flex;text-align:center;margin-top:8px"><div style="flex:1"><div class="lab" style="margin:0">Meilleur</div><div class="man" style="font-weight:700;font-size:14px">'+best+' kg</div></div><div style="flex:1"><div class="lab" style="margin:0">Moyen</div><div class="man" style="font-weight:700;font-size:14px">'+avg+' kg</div></div><div style="flex:1"><div class="lab" style="margin:0">Évolution</div><div class="man" style="font-weight:700;font-size:14px;color:'+(prog>=0?'var(--ok)':'var(--bad)')+'">'+(prog>=0?'+':'')+prog+'%</div></div></div></div>';
-  return h;
-}
-function toggleExDemoLive(){
-  const e=LIVE.prog.ex[LIVE.idx]; const g=exGif(e.name); if(!g)return;
-  const btn=$('#exPlayBtn');
-  if(_exDemo2){ clearInterval(_exDemo2); _exDemo2=null; if(btn)btn.textContent='▶'; return; }
-  g.forEach(s=>{const im=new Image();im.src=s;}); let i=0; if(btn)btn.textContent='⏸';
-  _exDemo2=setInterval(()=>{ const im=$('#exDemo'); if(!im){clearInterval(_exDemo2);_exDemo2=null;return;} i=1-i; im.src=g[i]; },650);
-}
-function setLog(i,k,v){ const st=LIVE.state[LIVE.idx]; st.log[i][k]=+v||0; if(k==='kg')st.weight=+v||st.weight; persistLive(); }
-function changeRest(){ const e=LIVE.prog.ex[LIVE.idx]; pickInt('Repos (secondes)',15,300,e.rest||90,'s',v=>{ e.rest=v; renderLive(); },15); }
-function addLiveSet(){ const st=LIVE.state[LIVE.idx]; const last=st.log[st.log.length-1]||{kg:20,reps:10,rpe:8}; st.sets.push(false); st.log.push({kg:last.kg,reps:last.reps,rpe:last.rpe,done:false}); renderLive(); }
 function jumpLive(i){ LIVE.idx=i; renderLive(); }
 function skipExercise(){ if(LIVE.idx<LIVE.prog.ex.length-1){ LIVE.idx++; renderLive(); toast('Exercice passé'); } else toast('Dernier exercice'); }
 function pauseLive(){
   clearInterval(liveTimer);
   LIVE.savedElapsed=Date.now()-LIVE.start;
-  DB.save('live_paused',LIVE); localStorage.removeItem('vvv_live_active');
+  DB.save('live_paused',LIVE);
   closeOv('ovLive'); LIVE=null; toast('Séance sauvegardée — reprends quand tu veux');
-  stopBgActivity(); renderSport();
+  renderSport();
 }
 function resumeLive(){
   const saved=DB.load('live_paused'); if(!saved) return;
@@ -2049,13 +1537,10 @@ function resumeLive(){
 function liveAdj(k,v){ const st=LIVE.state[LIVE.idx]; st[k]=Math.max(0,st[k]+v); $(k==='weight'?'#lvW':'#lvR').textContent=st[k]; }
 function toggleSet(i){
   const st=LIVE.state[LIVE.idx];
-  if(!st.log) st.log=st.sets.map(()=>({kg:st.weight,reps:st.reps,rpe:8}));
-  const s=st.log[i]||{kg:st.weight,reps:st.reps};
-  st.sets[i]=!st.sets[i]; st.log[i].done=st.sets[i];
-  const vol=(s.kg||0)*(s.reps||0);
-  if(st.sets[i]){ LIVE.setsDone++; LIVE.tonnage+=vol; openRest(st.log[i].rest||LIVE.prog.ex[LIVE.idx].rest||90); sfx('tick'); toast('+5 XP'); }
-  else { LIVE.setsDone--; LIVE.tonnage-=vol; }
-  persistLive(); renderLive();
+  st.sets[i]=!st.sets[i];
+  if(st.sets[i]){ LIVE.setsDone++; LIVE.tonnage+=st.weight*st.reps; openRest(); toast('+5 XP'); }
+  else { LIVE.setsDone--; LIVE.tonnage-=st.weight*st.reps; }
+  renderLive();
 }
 function validSet(){
   const st=LIVE.state[LIVE.idx];
@@ -2063,26 +1548,26 @@ function validSet(){
   if(idx<0){ toast('Toutes les séries faites !'); return; }
   toggleSet(idx);
 }
-function openRest(secs){
-  let t=secs||90; const total=t; const endAt=Date.now()+t*1000;
+function openRest(){
+  let t=90;
   const ov=document.createElement('div'); ov.className='ov on'; ov.id='restOv';
-  ov.innerHTML='<div class="ov-card" style="text-align:center"><div class="card-t" style="justify-content:center">⏱ Repos</div><div class="ring-wrap" style="width:170px;height:170px;margin:10px auto"><span id="restRing"></span><div class="ring-c"><div class="big mono" id="restNum" style="font-size:38px">'+t+'</div><div class="sm">sec</div></div></div><div class="row" style="gap:10px"><button class="btn ghost" onclick="addRest(30)">+30s</button><button class="btn" onclick="skipRest()">Passer</button></div></div>';
+  ov.innerHTML='<div class="ov-card" style="text-align:center"><div class="card-t" style="justify-content:center">⏱ Repos</div><div class="ring-wrap" style="width:160px;height:160px;margin:10px auto"><span id="restRing"></span><div class="ring-c"><div class="big mono" id="restNum" style="font-size:34px">90</div><div class="sm">sec</div></div></div><div class="row" style="gap:10px"><button class="btn ghost" onclick="addRest(30)">+30s</button><button class="btn" onclick="skipRest()">Passer</button></div></div>';
   document.body.appendChild(ov);
-  let extra=0;
+  const total=90;
   function tick(){
-    t=Math.max(0,Math.round((endAt+extra*1000-Date.now())/1000));
-    const rr=$('#restRing'); if(rr)rr.innerHTML=ringSVG(170,t/(total+extra)*100,12,'var(--e)');
-    const rn=$('#restNum'); if(rn)rn.textContent=t;
-    if(t<=0){ sfx('tick'); skipRest(); return; }
+    $('#restRing').innerHTML=ringSVG(160,t/total*100,12,'var(--e)');
+    $('#restNum').textContent=t;
+    if(t<=0){ skipRest(); return; }
+    t--;
   }
   tick();
-  restTimer=setInterval(tick,250);
-  window._restAdd=(s)=>{ extra+=s; };
+  restTimer=setInterval(tick,1000);
+  window._restAdd=(s)=>{ t+=s; };
 }
 function addRest(s){ if(window._restAdd)window._restAdd(s); }
 function skipRest(){ clearInterval(restTimer); const o=$('#restOv'); if(o)o.remove(); }
 function liveNav(d){ LIVE.idx=Math.max(0,Math.min(LIVE.prog.ex.length-1,LIVE.idx+d)); renderLive(); }
-function confirmCloseLive(){ if(confirm('Quitter la séance ? La progression sera perdue.')){ clearInterval(liveTimer); LIVE=null; localStorage.removeItem('vvv_live_active'); closeOv('ovLive'); stopBgActivity(); } }
+function confirmCloseLive(){ if(confirm('Quitter la séance ? La progression sera perdue.')){ clearInterval(liveTimer); LIVE=null; closeOv('ovLive'); } }
 function finishLive(){
   clearInterval(liveTimer); skipRest();
   const dur=Math.round((Date.now()-LIVE.start)/1000);
@@ -2099,14 +1584,7 @@ function finishLive(){
   // muscles travaillés
   const muscles={}; LIVE.prog.ex.forEach((e,i)=>{ if(LIVE.state[i].sets.some(Boolean)) (e.muscles||[]).forEach(m=>muscles[m]=(muscles[m]||0)+1); });
   MSESS.push({date:todayKey(),progName:LIVE.prog.name,tonnage:LIVE.tonnage,sets:LIVE.setsDone,reps:totalReps,duration:dur,calories:cal,muscles:Object.keys(muscles)});
-  // Historique par exercice (pour les graphiques de progression)
-  if(!PREFS.exHist) PREFS.exHist={};
-  LIVE.prog.ex.forEach((e,i)=>{ const st=LIVE.state[i]; if(st.sets.some(Boolean)){
-    const vol=(st.log||[]).reduce((a,s)=>a+(s.done?(s.kg||0)*(s.reps||0):0),0);
-    if(vol>0){ if(!PREFS.exHist[e.name])PREFS.exHist[e.name]=[]; PREFS.exHist[e.name].push({date:todayKey(),vol}); PREFS.exHist[e.name]=PREFS.exHist[e.name].slice(-30); }
-  }});
-  localStorage.removeItem('vvv_live_active');
-  saveAll(); refreshXP({animate:true}); burst(); sfx('finish'); stopBgActivity();
+  saveAll(); refreshXP({animate:true}); burst();
   let h='<div class="popin" style="text-align:center;padding:6px 0"><div style="font-size:50px">🏆</div><div class="man" style="font-weight:800;font-size:22px;margin:8px 0">Séance terminée !</div></div>';
   h+='<div class="sgrid" style="margin-bottom:12px"><div class="sbox"><div class="v">'+Math.round(LIVE.tonnage)+'</div><div class="l">Tonnage (kg)</div></div><div class="sbox"><div class="v">'+fmtTime(dur)+'</div><div class="l">Durée</div></div><div class="sbox"><div class="v">'+LIVE.setsDone+'</div><div class="l">Séries</div></div><div class="sbox"><div class="v">'+totalReps+'</div><div class="l">Répétitions</div></div><div class="sbox"><div class="v">'+cal+'</div><div class="l">Calories</div></div><div class="sbox"><div class="v" style="color:var(--or)">'+prs.length+'</div><div class="l">Records battus</div></div></div>';
   // progression
@@ -2183,19 +1661,7 @@ function openFiche(name){
   const lvCol=f.level==='Débutant'?'--ok':f.level==='Avancé'?'--bad':'--warn';
   let h='<div style="text-align:center;margin-bottom:14px"><div style="font-size:64px;animation:popIn .5s">'+f.anim+'</div><div class="man" style="font-weight:800;font-size:20px;margin-top:4px">'+f.name+'</div><div style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><span class="badge">'+f.equip+'</span><span class="badge" style="background:var(--ed);color:var('+lvCol+')">'+f.level+'</span></div></div>';
   // visuel animé (placeholder élégant simulant un GIF/avatar)
-  if(f.gif){
-    // Démonstration animée réelle (2 frames alternées = mouvement)
-    h+='<div style="position:relative;background:#fff;border:1px solid var(--hair);border-radius:18px;overflow:hidden;margin-bottom:14px">'+
-      '<img id="exDemo" src="'+f.gif[0]+'" alt="démonstration" style="width:100%;display:block;aspect-ratio:5/4;object-fit:cover" onerror="this.parentNode.style.display=\'none\';document.getElementById(\'exDemoFallback\').style.display=\'block\'">'+
-      '<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:10px 12px 8px;display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;font-weight:700"><span style="width:7px;height:7px;border-radius:50%;background:var(--e);animation:demoPulse 1s infinite"></span>DÉMONSTRATION DU MOUVEMENT</div></div>';
-    h+='<div id="exDemoFallback" style="display:none;position:relative;background:linear-gradient(135deg,var(--s2),var(--s1));border:1px solid var(--hair);border-radius:18px;padding:34px 16px;text-align:center;margin-bottom:14px"><div style="font-size:68px;animation:demoFloat 1.5s ease-in-out infinite">'+f.anim+'</div><div style="font-size:11px;color:var(--dim);margin-top:8px">Démonstration du mouvement</div></div>';
-    startExDemo(f.gif);
-  } else {
-    h+='<div style="position:relative;background:linear-gradient(135deg,var(--s2),var(--s1));border:1px solid var(--hair);border-radius:18px;padding:34px 16px;text-align:center;margin-bottom:14px;overflow:hidden">'+
-      '<div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,var(--ed),transparent 70%)"></div>'+
-      '<div style="position:relative;font-size:68px;animation:demoFloat 1.5s ease-in-out infinite;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))">'+f.anim+'</div>'+
-      '<div style="position:relative;display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:11px;color:var(--e);font-weight:700"><span style="width:7px;height:7px;border-radius:50%;background:var(--e);animation:demoPulse 1s infinite"></span>DÉMONSTRATION DU MOUVEMENT</div></div>';
-  }
+  h+='<div style="background:linear-gradient(135deg,var(--s2),var(--s1));border:1px solid var(--hair);border-radius:16px;padding:30px;text-align:center;margin-bottom:14px"><div style="font-size:56px;animation:demoFloat 1.6s ease-in-out infinite">'+f.anim+'</div><div style="font-size:11px;color:var(--dim);margin-top:8px">Démonstration animée du mouvement</div></div>';
   h+='<div class="card-t">🎯 Muscles sollicités</div><div style="margin-bottom:12px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">Principaux</div><div class="muscle-tags">'+(f.primary||[]).map(m=>'<span class="mtag" style="background:var(--ed);color:var(--e);border-color:var(--e)">'+m+'</span>').join('')+'</div>'+((f.secondary&&f.secondary.length)?'<div style="font-size:12px;color:var(--muted);margin:8px 0 4px">Secondaires</div><div class="muscle-tags">'+f.secondary.map(m=>'<span class="mtag">'+m+'</span>').join('')+'</div>':'')+'</div>';
   h+='<div class="card-t">📋 Exécution étape par étape</div>'+f.steps.map((s,i)=>'<div class="tip" style="margin-bottom:6px"><b style="color:var(--e)">'+(i+1)+'.</b> '+s+'</div>').join('');
   h+='<div class="card-t" style="margin-top:14px">🌬️ Respiration</div><div class="tip">'+f.breathing+'</div>';
@@ -2205,18 +1671,6 @@ function openFiche(name){
   if(f.variants&&f.variants.length){ h+='<div class="card-t" style="margin-top:14px">🔁 Variantes</div><div class="pills">'+f.variants.map(v=>'<div class="pill" onclick=\'openFiche("'+v.replace(/"/g,'&quot;')+'")\'>'+v+'</div>').join('')+'</div>'; }
   if(libCallback) h+='<button class="btn" style="margin-top:18px" onclick=\'pickEx("'+f.name.replace(/"/g,'&quot;')+'")\'>＋ Ajouter au programme</button>';
   $('#libBody').innerHTML=h;
-}
-let _exDemoTimer=null;
-function startExDemo(frames){
-  clearInterval(_exDemoTimer);
-  // précharge les 2 images
-  frames.forEach(src=>{ const im=new Image(); im.src=src; });
-  let i=0;
-  _exDemoTimer=setInterval(()=>{
-    const img=document.getElementById('exDemo');
-    if(!img){ clearInterval(_exDemoTimer); return; }
-    i=1-i; img.src=frames[i];
-  },850);
 }
 
 /* ---------- CONFIG EXERCISE ---------- */
@@ -2513,8 +1967,7 @@ function weightSparkline(){
   const pts=data.map((v,i)=>(i/(data.length-1)*W).toFixed(1)+','+(H-(v-min)/rng*H).toFixed(1)).join(' ');
   return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:60px"><polyline points="'+pts+'" fill="none" stroke="var(--e)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
-function addWeight(){ const cur=P.weight||62; const whole=Math.floor(cur),dec=Math.round((cur-whole)*10);
-  openPicker({title:'Ton poids (kg)',cols:[{values:range(30,200),sel:Math.max(0,whole-30)},{values:range(0,9),sel:dec,unit:'kg'}],seps:['.'],onOk:idx=>{ const w=(idx[0]+30)+idx[1]/10; WEIGHTLOG.push({date:todayKey(),w}); P.weight=w; saveAll(); renderSanteTool(); toast('Poids enregistré ✓'); }}); }
+function addWeight(){ const v=prompt('Ton poids aujourd\u2019hui (kg) :',P.weight||''); if(!v)return; const w=parseFloat(v.replace(',','.')); if(!w)return; WEIGHTLOG.push({date:todayKey(),w}); P.weight=w; saveAll(); renderSanteTool(); toast('Poids enregistré ✓'); }
 
 /* ============ PERFORMANCE LAB — calculateur intelligent ============ */
 /* 4 valeurs : distance (km), time (s), pace (s/km), speed (km/h).
@@ -2566,10 +2019,10 @@ function labField(label,icon,field,val,isComputed){
   return '<div class="card" style="padding:14px;margin-bottom:9px;cursor:pointer;'+(isComputed?'border-color:var(--e);background:var(--ed)':'')+'" onclick="editLab(\''+field+'\')"><div class="row"><div class="row" style="gap:11px"><span style="font-size:19px">'+icon+'</span><div><div style="font-size:11px;color:var(--muted)">'+label+(isComputed?' · calculé':filled?'':' · à saisir')+'</div><div class="mono" style="font-weight:700;font-size:19px;margin-top:2px;color:'+(isComputed?'var(--e)':'var(--snow)')+'">'+val+'</div></div></div><span style="color:var(--dim);font-size:15px">'+(isComputed?'':'✎')+'</span></div></div>';
 }
 function editLab(field){
-  if(field==='dist') pickDistance('Distance',LAB.dist||10,v=>labSet('dist',v));
-  else if(field==='time') pickTime('Temps',LAB.time||1800,v=>labSet('time',v));
-  else if(field==='pace') pickPace('Allure',LAB.pace||270,v=>labSet('pace',v));
-  else if(field==='speed') pickSpeed('Vitesse',LAB.speed||12,v=>labSet('speed',v));
+  if(field==='dist'){ const v=prompt('Distance en km :',LAB.dist||''); if(v!=null&&v!=='') labSet('dist',Math.max(.01,parseFloat(v.replace(',','.'))||0)); }
+  else if(field==='time'){ const v=prompt('Temps (mm:ss ou h:mm:ss) :',LAB.time?fmtTime(LAB.time):''); if(v) labSet('time',parseTime(v)); }
+  else if(field==='pace'){ const v=prompt('Allure (min:sec par km) :',LAB.pace?spkToStr(LAB.pace):''); if(v) labSet('pace',parseTime(v)); }
+  else if(field==='speed'){ const v=prompt('Vitesse en km/h :',LAB.speed?LAB.speed.toFixed(1):''); if(v!=null&&v!=='') labSet('speed',Math.max(.1,parseFloat(v.replace(',','.'))||0)); }
 }
 function resetLab(){ LAB={dist:null,time:null,pace:null,speed:null,recent:[]}; renderAIO(); }
 
@@ -2854,7 +2307,7 @@ function renderChrono(){
   }
   $('#outBody').innerHTML=h;
 }
-function chronoStop(){ chrono.running=false; chrono.elapsed+=Date.now()-chrono.start; cancelAnimationFrame(chrono.raf); sfx('stop'); stopBgActivity(); renderChrono(); }
+function chronoStop(){ chrono.running=false; chrono.elapsed+=Date.now()-chrono.start; cancelAnimationFrame(chrono.raf); renderChrono(); }
 function chronoReset(){ chrono={running:false,start:0,elapsed:0,laps:[],raf:null}; renderChrono(); }
 function exportLaps(){
   let txt='VVV Chronomètre\n'; chrono.laps.forEach((l,i)=>txt+='Tour '+(i+1)+' : '+fmtChrono(l)+'\n');
@@ -2862,8 +2315,8 @@ function exportLaps(){
 }
 function fmtChrono(ms){ const t=Math.floor(ms); const m=Math.floor(t/60000),s=Math.floor((t%60000)/1000),cs=Math.floor((t%1000)/10); return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+'.'+String(cs).padStart(2,'0'); }
 function chronoToggle(){
-  if(chrono.running){ chrono.running=false; chrono.elapsed+=Date.now()-chrono.start; cancelAnimationFrame(chrono.raf); sfx('stop'); stopBgActivity(); }
-  else { chrono.running=true; chrono.start=Date.now(); chronoTick(); sfx('start'); startBgActivity('Chronomètre'); }
+  if(chrono.running){ chrono.running=false; chrono.elapsed+=Date.now()-chrono.start; cancelAnimationFrame(chrono.raf); }
+  else { chrono.running=true; chrono.start=Date.now(); chronoTick(); }
   renderChrono();
 }
 function chronoTick(){ if(!chrono.running)return; const d=$('#chDisp'); if(d)d.textContent=fmtChrono(chrono.elapsed+Date.now()-chrono.start); chrono.raf=requestAnimationFrame(chronoTick); }
@@ -2890,22 +2343,20 @@ const _origSetWheel=setWheelVal;
 setWheelVal=function(key,val){ if(key==='TM'){timer.m=val;timer.total=timer.left=timer.m*60+timer.s;} else if(key==='TS'){timer.s=val;timer.total=timer.left=timer.m*60+timer.s;} else _origSetWheel(key,val); };
 function addTimer(s){ timer.left+=s; timer.total=Math.max(timer.total,timer.left); const n=$('#tmNum'); if(n)n.textContent=fmtMS(timer.left); }
 function timerToggle(){
-  stopAlarm();
-  if(timer.running){ clearInterval(timer.iv); timer.running=false; timer.endAt=null; stopBgActivity(); renderTimer(); return; }
+  if(timer.running){ clearInterval(timer.iv); timer.running=false; renderTimer(); return; }
   if(timer.left<=0){ timer.left=timer.total=timer.m*60+timer.s; }
   if(timer.left<=0){ toast('Règle une durée'); return; }
-  timer.running=true; timer.endAt=Date.now()+timer.left*1000; sfx('start'); startBgActivity('Minuteur'); renderTimer();
+  timer.running=true; renderTimer();
   timer.iv=setInterval(()=>{
-    // basé sur l'horloge → reste exact même en arrière-plan
-    timer.left=Math.max(0,Math.round((timer.endAt-Date.now())/1000));
+    timer.left--;
     const pct=timer.left/timer.total*100;
     const col=pct>50?'var(--e)':pct>20?'var(--warn)':'var(--bad)';
     const r=$('#tmRing'),n=$('#tmNum');
     if(r)r.innerHTML=ringSVG(180,pct,12,col); if(n)n.textContent=fmtMS(timer.left);
-    if(timer.left<=0){ clearInterval(timer.iv); timer.running=false; timer.endAt=null; burst(); stopBgActivity(); startAlarm('⏰ Minuteur terminé','Le temps est écoulé !'); renderTimer(); }
-  },250);
+    if(timer.left<=0){ clearInterval(timer.iv); timer.running=false; burst(); toast('⏰ Terminé !'); renderTimer(); }
+  },1000);
 }
-function resetTimer(){ clearInterval(timer.iv); timer.running=false; timer.endAt=null; stopAlarm(); stopBgActivity(); timer.left=timer.total=timer.m*60+timer.s||300; renderTimer(); }
+function resetTimer(){ clearInterval(timer.iv); timer.running=false; timer.left=timer.total=timer.m*60+timer.s||300; renderTimer(); }
 
 /* ---------- AGENDA ---------- */
 function renderAgenda(){
@@ -2967,124 +2418,18 @@ function prayerTimes(){
 
 /* ---------- PROFILE ---------- */
 function age(){ if(!P.bday)return'—'; const d=new Date(P.bday); return Math.floor((Date.now()-d)/31557600000); }
-function avatarHTML(size,fs){
-  if(P.photo) return '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background-image:url('+P.photo+');background-size:cover;background-position:center;margin:0 auto"></div>';
-  return '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:linear-gradient(135deg,var(--e),var(--marineL));display:flex;align-items:center;justify-content:center;margin:0 auto;font-family:Manrope;font-weight:800;font-size:'+fs+'px">'+(P.name?P.name[0].toUpperCase():'?')+'</div>';
-}
 function renderProfile(){
   const xp=xpProgress();
-  const sec=(label)=>'<div class="lab" style="margin:22px 0 10px">'+label+'</div>';
-  // HEADER : photo + nom + bio
-  let h='<div class="card stag" style="text-align:center;padding-top:20px"><div style="position:relative;width:92px;margin:0 auto 12px">'+avatarHTML(92,36)+
-    '<div onclick="changePhoto()" style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:var(--e);border:2px solid var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px">📷</div></div>';
-  h+='<div class="man" style="font-weight:800;font-size:22px">'+(P.name||'Athlète')+'</div><div class="badge" style="margin-top:8px">'+XP.name+' · '+t('level')+' '+XP.level+'</div>';
-  h+='<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;font-style:'+(P.bio?'normal':'italic')+'">'+(P.bio||'Ajoute une biographie ✍️')+'</div>';
-  h+='<div class="row" style="gap:8px;margin-top:14px;justify-content:center">'+
-    (P.photo?'<button class="btn ghost sm" style="width:auto;padding:8px 14px" onclick="removePhoto()">🗑 '+t('removePhoto')+'</button>':'')+
-    '<button class="btn ghost sm" style="width:auto;padding:8px 14px" onclick="editBio()">✍️ '+t('bio')+'</button></div></div>';
-  // STATS
-  h+='<div class="card stag" style="animation-delay:.05s"><div class="sgrid"><div class="sbox"><div class="v">'+(P.height||'—')+'</div><div class="l">'+t('height')+' (cm)</div></div><div class="sbox"><div class="v">'+(P.weight||'—')+'</div><div class="l">'+t('weight')+' (kg)</div></div><div class="sbox"><div class="v">'+age()+'</div><div class="l">'+t('age')+'</div></div><div class="sbox"><div class="v">'+(getUserVDOT()||'—')+'</div><div class="l">VDOT</div></div></div></div>';
-  h+='<div class="card stag" style="animation-delay:.10s"><div class="row" style="margin-bottom:8px"><span class="lab">'+t('xpProgress')+'</span><span class="mono" style="color:var(--e)">'+XP.total+' XP</span></div><div class="pbar"><div style="width:'+xp.pct+'%"></div></div></div>';
-  h+='<button class="btn stag" style="animation-delay:.15s" onclick="openProfileEdit()">✏️ '+t('editInfos')+'</button>';
-  h+='<button class="btn ghost stag" style="margin-top:10px;animation-delay:.16s" onclick="openRecords()">🏅 '+t('perfHistory')+'</button>';
-  // OBJECTIF
-  h+=sec('🎯 '+t('objective'));
-  h+='<div class="card stag"><div class="row"><div><div style="font-weight:700">'+(P.objRace||P.goal||'—')+'</div><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(P.compDate?fmtDate(P.compDate):'—')+'</div></div><span style="color:var(--e);font-size:12px;cursor:pointer" onclick="nav(\'sport\');sportTab=\'run\';runSub=\'ia\';renderSport()">'+t('edit')+'</span></div></div>';
-  // LANGUE
-  h+=sec('🌍 '+t('language'));
-  h+='<div class="card stag"><div class="pills">'+LANGS.map(l=>'<div class="pill '+(curLang()===l[0]?'on':'')+'" onclick="setLang(\''+l[0]+'\')">'+l[1]+' '+l[2]+'</div>').join('')+'</div></div>';
-  // APPARENCE
-  h+=sec('🎨 '+t('appearance'));
-  // MODE sombre / clair / auto
-  const mode=P.mode||'dark';
-  h+='<div class="card stag"><div class="lab" style="margin-bottom:8px">Thème</div><div class="pills">'+
-    [['dark','🌙 Sombre'],['light','☀️ Clair'],['auto','⚙️ Auto']].map(m=>'<div class="pill '+(mode===m[0]?'on':'')+'" onclick="setMode(\''+m[0]+'\')">'+m[1]+'</div>').join('')+'</div>';
-  // COULEUR D'ACCENT + Autre (palette personnalisée)
-  const custom=P.theme==='custom';
-  h+='<div class="lab" style="margin:14px 0 8px">'+t('accentColor')+'</div><div class="pills">'+
-    [['blue','Bleu','#3D7FFF'],['violet','Violet','#A98CF0'],['cyan','Cyan','#7FE0E8'],['green','Vert','#33D399'],['orange','Orange','#FF8A3D'],['pink','Rose','#FF5C9E']].map(c=>'<div class="pill '+(P.theme===c[0]?'on':'')+'" onclick="setTheme(\''+c[0]+'\')"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+c[2]+';margin-right:6px"></span>'+c[1]+'</div>').join('')+
-    '<div class="pill '+(custom?'on':'')+'" onclick="openColorPicker()"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(custom?P.customColor:'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)')+';margin-right:6px"></span>🎨 Autre</div></div></div>';
-  // NOTIFICATIONS & SONS
-  h+=sec('🔔 '+t('notifsApp'));
-  h+='<div class="card stag"><div class="row" style="margin-bottom:14px"><span style="font-size:14px">'+t('trainReminders')+'</span><div class="toggle'+(P.notif!==false?' on':'')+'" onclick="toggleNotif(this)"></div></div>'+
-    '<div class="row" style="margin-bottom:14px"><span style="font-size:14px">🔊 '+t('sounds')+'</span><div class="toggle'+(P.sounds!==false?' on':'')+'" onclick="toggleSounds(this)"></div></div>'+
-    '<div class="row"><span style="font-size:14px">'+t('units')+'</span><div class="toggle on"></div></div></div>';
-  // DONNÉES
-  h+=sec('🔒 '+t('dataPrivacy'));
-  h+='<div class="card stag"><button class="btn ghost sm" style="margin-bottom:8px" onclick="exportData()">📤 '+t('exportData')+'</button>';
-  h+='<button class="btn ghost sm" style="margin-bottom:8px" onclick="importData()">📥 '+t('importData')+'</button>';
-  h+='<button class="btn ghost sm" style="color:var(--bad)" onclick="resetAll()">🗑 '+t('resetApp')+'</button></div>';
-  h+='<div style="text-align:center;color:var(--dim);font-size:12px;margin:20px 0">VVV — Elite Athletic Intelligence · v2.0</div>';
+  let h='<div class="card stag" style="text-align:center"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--e),var(--marineL));display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-family:Manrope;font-weight:800;font-size:34px">'+(P.name?P.name[0].toUpperCase():'?')+'</div>';
+  h+='<div class="man" style="font-weight:800;font-size:22px">'+(P.name||'Athlète')+'</div><div class="badge" style="margin-top:8px">'+XP.name+' · Niv. '+XP.level+'</div></div>';
+  h+='<div class="card stag" style="animation-delay:.05s"><div class="sgrid"><div class="sbox"><div class="v">'+(P.height||'—')+'</div><div class="l">Taille (cm)</div></div><div class="sbox"><div class="v">'+(P.weight||'—')+'</div><div class="l">Poids (kg)</div></div><div class="sbox"><div class="v">'+age()+'</div><div class="l">Âge</div></div><div class="sbox"><div class="v">'+(getUserVDOT()||'—')+'</div><div class="l">VDOT</div></div></div></div>';
+  h+='<div class="card stag" style="animation-delay:.10s"><div class="row" style="margin-bottom:8px"><span class="lab">Progression XP</span><span class="mono" style="color:var(--e)">'+XP.total+' XP</span></div><div class="pbar"><div style="width:'+xp.pct+'%"></div></div></div>';
+  if(P.coach) h+='<div class="card stag" style="animation-delay:.12s"><div class="row"><span class="lab">Coach</span><span style="font-weight:600">'+P.coach+'</span></div></div>';
+  h+='<button class="btn stag" style="animation-delay:.15s" onclick="openProfileEdit()">✏️ Modifier le profil</button>';
+  h+='<button class="btn ghost stag" style="margin-top:10px;animation-delay:.16s" onclick="openRecords()">🏅 Historique des performances</button>';
+  h+='<button class="btn ghost stag" style="margin-top:10px;animation-delay:.17s" onclick="openSettings()">⚙️ Paramètres</button>';
+  h+='<div style="text-align:center;color:var(--dim);font-size:12px;margin-top:20px">VVV — Elite Athletic Intelligence<br>Version v2.0</div>';
   $('#s-profil').innerHTML=h;
-}
-/* ---- Photo & Bio ---- */
-function changePhoto(){
-  // Propose galerie OU appareil photo
-  let h='<div class="tip" style="margin-bottom:14px">Choisis ta photo de profil :</div>';
-  h+='<button class="btn" style="margin-bottom:10px" onclick="pickPhotoSource(false)">🖼️ Depuis la galerie</button>';
-  h+='<button class="btn ghost" style="margin-bottom:10px" onclick="pickPhotoSource(true)">📷 Prendre une photo</button>';
-  if(P.photo) h+='<button class="btn ghost" style="color:var(--bad)" onclick="removePhoto();closeOv(\'ovProg\')">🗑 Supprimer la photo actuelle</button>';
-  $('#ovProgTitle').textContent='Photo de profil'; $('#progBody').innerHTML=h; $('#ovProg').style.zIndex='13700'; openOv('ovProg');
-}
-function pickPhotoSource(useCamera){
-  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
-  if(useCamera) inp.capture='user'; // appareil photo. Sans capture = galerie
-  inp.onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader();
-    r.onload=()=>{ const img=new Image(); img.onload=()=>{ openCropper(img); }; img.src=r.result; };
-    r.readAsDataURL(f); };
-  inp.click();
-}
-/* Recadrage simple : zoom + déplacement avant validation */
-let _crop=null;
-const CROP_VIEW=300, CROP_DPR=Math.min(3,window.devicePixelRatio||2), CROP_OUT=512;
-function openCropper(img){
-  closeOv('ovProg');
-  _crop={img,scale:1,x:0,y:0};
-  let h='<div class="tip" style="margin-bottom:12px">Glisse pour déplacer, utilise le curseur pour zoomer.</div>';
-  h+='<div id="cropStage" style="position:relative;width:'+CROP_VIEW+'px;height:'+CROP_VIEW+'px;max-width:100%;margin:0 auto 14px;border-radius:50%;overflow:hidden;background:#000;touch-action:none;border:2px solid var(--e)"><canvas id="cropCv" style="width:100%;height:100%;display:block"></canvas></div>';
-  h+='<div class="field"><label>Zoom</label><input id="cropZoom" type="range" min="1" max="4" step="0.01" value="1" style="width:100%"></div>';
-  h+='<button class="btn" onclick="applyCrop()">✓ Valider la photo</button>';
-  $('#ovProgTitle').textContent='Recadrer'; $('#progBody').innerHTML=h; $('#ovProg').style.zIndex='13700'; openOv('ovProg');
-  setTimeout(initCropper,40);
-}
-function drawCrop(){
-  const c=$('#cropCv'); if(!c)return;
-  const R=CROP_VIEW*CROP_DPR;
-  if(c.width!==R){ c.width=R; c.height=R; }
-  const ctx=c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-  const{img,scale,x,y}=_crop;
-  ctx.clearRect(0,0,R,R); ctx.fillStyle='#000'; ctx.fillRect(0,0,R,R);
-  const base=R/Math.min(img.width,img.height); const w=img.width*base*scale, hh=img.height*base*scale;
-  ctx.drawImage(img,(R-w)/2+x*CROP_DPR,(R-hh)/2+y*CROP_DPR,w,hh);
-}
-function initCropper(){
-  drawCrop();
-  const z=$('#cropZoom'); if(z) z.oninput=()=>{ _crop.scale=+z.value; drawCrop(); };
-  const stage=$('#cropStage'); if(!stage)return;
-  let drag=false,lx=0,ly=0;
-  stage.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY; stage.setPointerCapture&&stage.setPointerCapture(e.pointerId); });
-  stage.addEventListener('pointermove',e=>{ if(!drag)return; _crop.x+=e.clientX-lx; _crop.y+=e.clientY-ly; lx=e.clientX; ly=e.clientY; drawCrop(); });
-  window.addEventListener('pointerup',()=>drag=false);
-}
-function applyCrop(){
-  // Rendu final haute résolution directement depuis l'image source (net, non pixelisé)
-  const{img,scale,x,y}=_crop;
-  const out=document.createElement('canvas'); out.width=CROP_OUT; out.height=CROP_OUT;
-  const ctx=out.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,CROP_OUT,CROP_OUT);
-  const base=CROP_OUT/Math.min(img.width,img.height); const w=img.width*base*scale, hh=img.height*base*scale;
-  const ratio=CROP_OUT/CROP_VIEW; // remappe le déplacement de l'aperçu vers la sortie
-  ctx.drawImage(img,(CROP_OUT-w)/2+x*ratio,(CROP_OUT-hh)/2+y*ratio,w,hh);
-  P.photo=out.toDataURL('image/jpeg',0.9); saveAll(); closeOv('ovProg'); renderProfile(); toast('Photo mise à jour ✓'); sfx&&sfx('goal');
-}
-function removePhoto(){ delete P.photo; saveAll(); renderProfile(); toast('Photo supprimée'); }
-function editBio(){ const v=prompt('Ta biographie :',P.bio||''); if(v!==null){ P.bio=v.trim().slice(0,160); saveAll(); renderProfile(); } }
-function importData(){
-  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
-  inp.onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader();
-    r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d.profile){P=d.profile;DB.save('profile',P);} if(d.sessions){SESS=d.sessions;DB.save('sessions',SESS);} if(d.muscu){MSESS=d.muscu;DB.save('muscu_sessions',MSESS);} if(d.xp){XP=d.xp;DB.save('xp',XP);} toast('Données importées ✓'); applyTheme(); renderProfile(); }catch(err){ toast('Fichier invalide'); } };
-    r.readAsText(f); };
-  inp.click();
 }
 /* ---------- HISTORIQUE DES PERFORMANCES (records illimités) ---------- */
 const REC_DISTANCES=[['100 m',100],['200 m',200],['300 m',300],['400 m',400],['600 m',600],['800 m',800],['1000 m',1000],['1500 m',1500],['3000 m',3000],['5000 m',5000],['10 km',10000],['15 km',15000],['Semi-marathon',21097],['Marathon',42195],['Trail',0],['Cross',0]];
@@ -3105,30 +2450,26 @@ function openRecords(){
 }
 let recTmp={};
 function addRecord(){
-  // Étape 1 : choisir la distance via Wheel Picker
-  const names=REC_DISTANCES.map(d=>d[0]).concat(['Autre']);
-  openPicker({title:'Choisis la distance',cols:[{values:names,sel:9,wide:true}],onOk:idx=>{
-    if(names[idx[0]]==='Autre'){ pickDistance('Distance personnalisée',5,km=>recordForm([(km>=1?km+' km':Math.round(km*1000)+' m'),Math.round(km*1000)])); }
-    else recordForm(REC_DISTANCES[idx[0]]);
-  }});
-}
-function recordForm(d){
-  recTmp={dist:d[0],meters:d[1],timeS:d[1]>=21000?5400:(d[1]>=5000?1200:300),date:todayKey(),place:'',feel:''};
-  let h='<div style="text-align:center;margin-bottom:16px"><div class="badge" style="font-size:14px;padding:8px 16px">🏁 '+d[0]+'</div></div>';
-  h+='<div class="field"><label>Chrono *</label><div class="inp pkfield set" id="rc_time" onclick="pickTime(\'Chrono '+d[0]+'\',recTmp.timeS,v=>{recTmp.timeS=v;document.getElementById(\'rc_time\').textContent=fmtTime(v)},'+(d[1]>=15000?'true':'false')+')">'+fmtTime(recTmp.timeS)+'</div></div>';
+  recTmp={dist:'5000 m',time:'',date:todayKey(),place:'',weather:'',feel:'',hrAvg:'',hrMax:''};
+  let h='<div class="field"><label>Distance</label><select class="inp" id="rc_dist">'+REC_DISTANCES.map(d=>'<option '+(d[0]==='5000 m'?'selected':'')+'>'+d[0]+'</option>').join('')+'</select></div>';
+  h+='<div class="field"><label>Chrono *</label><input class="inp" id="rc_time" placeholder="18:30 ou 1:25:00"></div>';
   h+='<div class="field"><label>Date</label><input class="inp" id="rc_date" type="date" value="'+todayKey()+'"></div>';
-  h+='<div class="field"><label>Lieu (optionnel)</label><input class="inp" id="rc_place" placeholder="Lieu de la course"></div>';
-  h+='<div class="field"><label>Sensation (optionnel)</label><input class="inp" id="rc_feel" placeholder="Comment c\u2019était ?"></div>';
-  h+='<button class="btn" onclick="saveRecord()">💾 Enregistrer cette performance</button>';
-  h+='<button class="btn ghost" style="margin-top:10px" onclick="openRecords()">‹ Retour</button>';
+  h+='<div class="field"><label>Lieu (optionnel)</label><input class="inp" id="rc_place" placeholder="Béjaïa"></div>';
+  h+='<div class="field"><label>Météo (optionnel)</label><input class="inp" id="rc_weather" placeholder="☀️ 18°C"></div>';
+  h+='<div class="field"><label>Sensation (optionnel)</label><input class="inp" id="rc_feel" placeholder="Très bonnes jambes"></div>';
+  h+='<div class="row" style="gap:10px"><div class="field" style="flex:1"><label>FC moy</label><input class="inp" id="rc_hra" type="number" placeholder="170"></div><div class="field" style="flex:1"><label>FC max</label><input class="inp" id="rc_hrm" type="number" placeholder="188"></div></div>';
+  h+='<button class="btn" onclick="saveRecord()">💾 Enregistrer</button>';
   $('#profileEditBody').innerHTML=h;
 }
 function saveRecord(){
-  const time=fmtTime(recTmp.timeS);
-  RECORDS.push({dist:recTmp.dist,meters:recTmp.meters,time,date:$('#rc_date').value,place:$('#rc_place').value.trim(),feel:$('#rc_feel').value.trim()});
-  if(recTmp.dist==='5000 m')P.pb5k=time; if(recTmp.dist==='3000 m')P.pb3k=time; if(recTmp.dist==='1500 m')P.pb1500=time; if(recTmp.dist==='10 km')P.pb10k=time;
+  const dist=$('#rc_dist').value, time=$('#rc_time').value.trim();
+  if(!time){ toast('Entre un chrono'); return; }
+  const meters=(REC_DISTANCES.find(d=>d[0]===dist)||[,0])[1];
+  RECORDS.push({dist,meters,time,date:$('#rc_date').value,place:$('#rc_place').value.trim(),weather:$('#rc_weather').value.trim(),feel:$('#rc_feel').value.trim(),hrAvg:$('#rc_hra').value,hrMax:$('#rc_hrm').value});
+  // met à jour VDOT + pb rétrocompat
+  if(dist==='5000 m')P.pb5k=time; if(dist==='3000 m')P.pb3k=time; if(dist==='1500 m')P.pb1500=time; if(dist==='10 km')P.pb10k=time;
   P.vdot=computeVDOTfromRecords();
-  saveAll(); refreshXP({animate:true}); openRecords(); toast('Performance ajoutée ✓'); burst();
+  saveAll(); refreshXP({animate:true}); openRecords(); toast('Performance ajoutée ✓');
 }
 function delRecord(i){ const sorted=[...RECORDS].sort((a,b)=>(a.meters||0)-(b.meters||0)); const r=sorted[i]; RECORDS=RECORDS.filter(x=>x!==r); P.vdot=computeVDOTfromRecords(); saveAll(); openRecords(); }
 function computeVDOTfromRecords(){
@@ -3166,10 +2507,11 @@ function openSettings(){
   h+='<div class="card"><div class="row" style="margin-bottom:14px"><span>Mode sombre</span><div class="toggle on"></div></div>'+
     '<div class="row" style="margin-bottom:14px"><span>Unités métriques (km)</span><div class="toggle on"></div></div>'+
     '<div class="row"><span>Notifications</span><div class="toggle'+(P.notif?' on':'')+'" onclick="P.notif=!P.notif;saveAll();this.classList.toggle(\'on\')"></div></div></div>';
-  h+='<div class="card"><div class="card-t">🔒 Données & confidentialité</div><button class="btn ghost sm" style="margin-bottom:8px" onclick="exportData()">📤 Exporter mes données (JSON)</button><button class="btn ghost sm" style="color:var(--bad)" onclick="resetAll()">🗑 Réinitialisation totale</button></div>';
-  h+='<div style="text-align:center;color:var(--dim);font-size:12px">VVV v2.0 · Données locales uniquement</div>';
+  h+='<div class="card"><div class="card-t">🔒 Données & confidentialité</div><button class="btn ghost sm" style="margin-bottom:8px" onclick="exportData()">📤 Exporter mes données (JSON)</button><button class="btn ghost sm" style="margin-bottom:8px" onclick="signOutUser()">🚪 Se déconnecter</button><button class="btn ghost sm" style="color:var(--bad)" onclick="resetAll()">🗑 Réinitialisation totale</button></div>';
+  h+='<div style="text-align:center;color:var(--dim);font-size:12px">VVV v2.0 · Synchronisé avec ton compte</div>';
   $('#settingsBody').innerHTML=h; openOv('ovSettings');
 }
+function setTheme(t){ P.theme=t; saveAll(); applyTheme(); openSettings(); }
 function exportData(){
   const data={profile:P,sessions:SESS,muscu:MSESS,custom:CUSTOM,plan:PLAN,goals:GOALS,agenda:AGENDA,xp:XP};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -3183,52 +2525,29 @@ function resetAll(){
   location.reload();
 }
 
-/* ============ PWA : manifest + service worker (offline-first) ============ */
-function setupPWA(){
-  // Manifest dynamique
-  try{
-    const icon=appIconDataURL();
-    const manifest={ name:'VVV — Elite Athletic Intelligence', short_name:'VVV', start_url:'.', scope:'.',
-      display:'standalone', orientation:'portrait', background_color:'#0A0D12', theme_color:'#0A0D12',
-      icons:[{src:icon,sizes:'192x192',type:'image/svg+xml',purpose:'any maskable'},{src:icon,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}] };
-    const blob=new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'});
-    const url=URL.createObjectURL(blob);
-    let link=document.querySelector('link[rel="manifest"]'); if(!link){ link=document.createElement('link'); link.rel='manifest'; document.head.appendChild(link); }
-    link.href=url;
-  }catch(e){}
-  // Service worker : cache la page courante pour fonctionner hors-ligne
-  if('serviceWorker'in navigator && location.protocol.startsWith('http')){
-    const swCode="const C='vvv-v2';self.addEventListener('install',e=>{self.skipWaiting()});self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.open(C).then(c=>c.match(e.request).then(r=>{const f=fetch(e.request).then(res=>{try{c.put(e.request,res.clone())}catch(x){}return res}).catch(()=>r);return r||f})))});";
-    try{ const b=new Blob([swCode],{type:'text/javascript'}); navigator.serviceWorker.register(URL.createObjectURL(b)).catch(()=>{}); }catch(e){}
+async function startApp(){
+  if(!window.supabaseClient){ boot(); return; }
+  const { data:{ session } } = await window.supabaseClient.auth.getSession();
+  if(session && session.user){
+    window.currentUserId = session.user.id;
+    await cloudPullAll(session.user.id);
+    reloadState();
+    hideLoginScreen();
+    boot();
+  } else {
+    showLoginScreen();
   }
+  window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if(event === 'SIGNED_IN' && session){
+      window.currentUserId = session.user.id;
+      await cloudPullAll(session.user.id);
+      reloadState();
+      hideLoginScreen();
+      boot();
+    } else if(event === 'SIGNED_OUT'){
+      location.reload();
+    }
+  });
 }
 
-/* ============ ÉTAT EN LIGNE / HORS LIGNE + SYNC ============ */
-function checkConnectivity(){
-  const online=navigator.onLine;
-  if(online){ syncOnline(true); }
-  else {
-    const last=PREFS.lastOnline||Date.now();
-    const days=Math.floor((Date.now()-last)/86400000);
-    if(days>=3) setTimeout(()=>toast('📡 Hors ligne depuis '+days+' j — pense à te reconnecter'),1500);
-  }
-  return online;
-}
-/* Synchronisation silencieuse quand Internet est disponible */
-function syncOnline(silent){
-  if(!navigator.onLine) return;
-  PREFS.lastOnline=Date.now();
-  PREFS.lastSync=Date.now();
-  // Recalcule/rafraîchit les données dépendantes de la date (prières, calendrier, J-X…)
-  try{ if($('#s-home')&&$('#s-home').classList.contains('on')) renderHome(); }catch(e){}
-  try{ if($('#s-outils')&&$('#s-outils').classList.contains('on')&&outilsTab==='priere') renderPriere(); }catch(e){}
-  DB.save('prefs',PREFS);
-  if(!silent) toast('🔄 Données synchronisées');
-}
-window.addEventListener('online',()=>{ toast('🟢 Connexion rétablie · synchronisation…'); syncOnline(false); });
-window.addEventListener('offline',()=>{ toast('🔌 Mode hors ligne — tout reste accessible'); });
-// Sync silencieuse périodique tant que l'app est ouverte
-setInterval(()=>{ if(navigator.onLine) syncOnline(true); },5*60*1000);
-
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
-setupPWA();
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startApp); else startApp();

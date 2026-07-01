@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="VVV">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0D12">
 <title>VVV — Elite Athletic Intelligence</title>
@@ -21,18 +19,6 @@
   --diamant:#7FE0E8; --maitre:#A98CF0; --legende:#FFD76A;
   --ok:#33D399; --warn:#FFB454; --bad:#FF5C6C;
 }
-/* ===== MODE CLAIR ===== */
-html[data-mode="light"]{
-  --bg:#F2F4F8; --s1:#FFFFFF; --s2:#EDF0F5; --marineL:#D7E3FF; --hair:#E2E6ED;
-  --dim:#9AA3B2; --muted:#5C6473; --snow:#10141B;
-  --ok:#11A56B; --warn:#D98914; --bad:#E0394A;
-}
-html[data-mode="light"] #nav{background:rgba(255,255,255,.92);}
-html[data-mode="light"] .ov{background:rgba(120,130,150,.35);}
-html[data-mode="light"] .tb-gear{background:var(--s2);}
-html[data-mode="light"] .topbar{background:linear-gradient(180deg,var(--bg) 70%,transparent);}
-html{transition:background .25s ease;}
-.card,.btn,.pill,.inp,.favtile,.sbox{transition:background .25s ease,border-color .25s ease,color .25s ease;}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{background:var(--bg);color:var(--snow);font-family:'Inter',sans-serif;overflow-x:hidden;width:100%;}
 body{max-width:430px;margin:0 auto;position:relative;min-height:100vh;}
@@ -64,9 +50,7 @@ body{max-width:430px;margin:0 auto;position:relative;min-height:100vh;}
 @keyframes slideUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 @keyframes popIn{0%{opacity:0;transform:scale(.85);}60%{transform:scale(1.04);}100%{opacity:1;transform:scale(1);}}
 .popin{animation:popIn .4s cubic-bezier(.34,1.56,.64,1);}
-@keyframes demoFloat{0%,100%{transform:translateY(0) scale(1) rotate(-2deg);}50%{transform:translateY(-12px) scale(1.08) rotate(2deg);}}
-@keyframes demoPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.3;transform:scale(1.6);}}
-@keyframes alarmShake{0%,100%{transform:rotate(-12deg) scale(1);}25%{transform:rotate(12deg) scale(1.1);}50%{transform:rotate(-8deg) scale(1.05);}75%{transform:rotate(8deg) scale(1.1);}}
+@keyframes demoFloat{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-10px) scale(1.06);}}
 
 /* BTN */
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--e);color:#fff;
@@ -89,22 +73,6 @@ body{max-width:430px;margin:0 auto;position:relative;min-height:100vh;}
 .inp{width:100%;background:var(--s2);border:1px solid var(--hair);border-radius:12px;padding:13px 14px;
   color:var(--snow);font-size:15px;font-family:'Inter';}
 .inp:focus{outline:none;border-color:var(--e);}
-.note{background:var(--ed);border:1px solid rgba(61,127,255,.25);border-radius:12px;padding:10px 12px;font-size:12.5px;color:var(--muted);line-height:1.45;margin-bottom:14px;display:flex;gap:8px;}
-.note b{color:var(--e);}
-.setcell{width:100%;background:var(--s2);border:1px solid var(--hair);border-radius:10px;padding:9px 4px;text-align:center;color:var(--snow);font-family:'JetBrains Mono';font-weight:600;font-size:15px;}
-.setcell:focus{outline:none;border-color:var(--e);}
-.pkfield{cursor:pointer;color:var(--dim);display:flex;align-items:center;justify-content:space-between;}
-.pkfield.set{color:var(--snow);font-weight:600;}
-.pkfield::after{content:'⌄';color:var(--muted);font-size:18px;}
-.perfrow{display:flex;gap:10px;margin-bottom:10px;align-items:stretch;animation:slideUp .3s ease;}
-.perfcard{flex:1;background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:12px 14px;cursor:pointer;transition:border-color .15s;}
-.perfcard:active{border-color:var(--e);}
-.perfcard .pcl{font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:5px;}
-.perfcard .pcv{font-family:'JetBrains Mono';font-weight:700;font-size:18px;color:var(--snow);}
-.perfcard .pcv.empty{color:var(--dim);font-size:14px;font-weight:600;font-family:'Manrope';}
-.perfdel{width:38px;flex:0 0 38px;background:var(--s2);border:1px solid var(--hair);border-radius:14px;color:var(--bad);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
-.addperf{width:100%;background:transparent;border:1.5px dashed var(--hair);border-radius:14px;padding:13px;color:var(--e);font-family:'Manrope';font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;transition:border-color .15s;}
-.addperf:active{border-color:var(--e);background:var(--ed);}
 select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238993A6' stroke-width='2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;}
 
 /* NAV */
@@ -220,34 +188,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
   font-family:'JetBrains Mono';font-weight:700;font-size:20px;color:var(--dim);}
 .wheel .wi.sel{color:var(--snow);font-size:24px;}
 .wheel-sep{font-family:'JetBrains Mono';font-weight:700;font-size:22px;}
-.wheel-pad{height:80px;}
-/* Wheel Picker premium — parfaitement stable, zéro décalage horizontal */
-.pk-wrap{position:relative;display:flex;gap:2px;align-items:stretch;justify-content:center;padding:10px 0;
-  height:210px;overflow:hidden;}
-.pk-wrap::before{content:'';position:absolute;top:50%;left:6px;right:6px;height:42px;transform:translateY(-50%);
-  background:var(--ed);border:1px solid var(--e);border-radius:12px;pointer-events:none;z-index:0;}
-.pkcol{position:relative;z-index:1;height:100%;flex:0 0 auto;min-width:60px;
-  overflow-y:scroll;overflow-x:hidden;scroll-snap-type:y mandatory;
-  -webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior:contain;
-  mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);
-  -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);}
-.pkcol.wide{min-width:150px;flex:1 1 auto;}
-.pkcol::-webkit-scrollbar{display:none;width:0;}
-.pkitem{height:42px;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;
-  font-family:'JetBrains Mono';font-weight:600;font-size:19px;color:var(--dim);
-  transition:color .18s ease,opacity .18s ease,transform .18s ease;transform-origin:center center;
-  will-change:transform;white-space:nowrap;opacity:.45;}
-.pkitem.sel{color:var(--snow);font-weight:700;transform:scale(1.18);opacity:1;}
-.pk-sep{z-index:1;font-family:'JetBrains Mono';font-weight:700;font-size:20px;color:var(--muted);
-  display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:8px;}
-.pk-unit{z-index:1;font-size:13px;color:var(--muted);display:flex;align-items:center;flex:0 0 auto;margin-left:2px;}
-.pk-pad{height:84px;}
-/* RTL (arabe) */
-html[dir="rtl"] body{direction:rtl;}
-html[dir="rtl"] .topbar,html[dir="rtl"] .row,html[dir="rtl"] .ov-head{direction:rtl;}
-html[dir="rtl"] .mono,html[dir="rtl"] .pkcol,html[dir="rtl"] .wheels{direction:ltr;}
-html[dir="rtl"] .tb-title,html[dir="rtl"] .card-t,html[dir="rtl"] .lab{text-align:right;}
-html[dir="rtl"] .nb span{direction:rtl;}
+.wheel-pad{height:40px;}
 
 /* HEATMAP */
 .heat{display:grid;grid-template-columns:repeat(13,1fr);gap:3px;}
@@ -293,6 +234,16 @@ hr.hl{border:none;border-top:1px solid var(--hair);margin:14px 0;}
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="position:fixed;inset:0;z-index:9999;background:#0A0D12;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center;">
+  <div style="font-family:'Manrope',sans-serif;font-weight:800;font-size:36px;letter-spacing:-1px;color:#F4F6F9;">VVV</div>
+  <div style="color:#8993A6;font-size:14px;max-width:280px;line-height:1.5;">Connecte-toi avec Google pour synchroniser tes séances sur tous tes appareils</div>
+  <button onclick="signInWithGoogle()" style="display:flex;align-items:center;gap:10px;background:#F4F6F9;color:#0A0D12;border:none;border-radius:14px;padding:14px 26px;font-weight:700;font-size:15px;font-family:'Inter',sans-serif;cursor:pointer;">
+    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.7 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.4 5.1 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.4 5.1 29.5 3 24 3c-7.7 0-14.3 4.4-17.7 10.7z"/><path fill="#4CAF50" d="M24 45c5.4 0 10.3-1.8 14.1-5l-6.5-5.5C29.5 36 26.9 37 24 37c-5.4 0-9.9-3.3-11.4-8l-6.6 5.1C9.6 40.6 16.2 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3-3.4 5.5-6.4 7l6.5 5.5c-.5.4 7-5 7-16.5 0-1.3-.1-2.7-.4-3.5z"/></svg>
+    Continuer avec Google
+  </button>
+</div>
+
 <!-- ONBOARDING -->
 <div id="ob">
   <div class="ob-prog" id="obProg"></div>
@@ -305,50 +256,50 @@ hr.hl{border:none;border-top:1px solid var(--hair);margin:14px 0;}
   </div>
   <div class="ob-step" data-step="2">
     <h1>Qui es-tu ?</h1><p class="intro">Tes informations de base.</p>
-    <div class="field"><label>Prénom *</label><input class="inp" id="ob_name" placeholder="Ton prénom"></div>
+    <div class="field"><label>Prénom *</label><input class="inp" id="ob_name" placeholder="Nasri"></div>
     <div class="field"><label>Date de naissance *</label><input class="inp" id="ob_bday" type="date"></div>
-    <div class="field"><label>Sexe *</label><select class="inp" id="ob_sex"><option value="">Sélectionner</option><option>Homme</option><option>Femme</option></select></div>
-    <div class="field"><label>Ville *</label><input class="inp" id="ob_city" placeholder="Ta ville"></div>
+    <div class="field"><label>Sexe *</label><select class="inp" id="ob_sex"><option value="">—</option><option>Homme</option><option>Femme</option></select></div>
+    <div class="field"><label>Ville *</label><input class="inp" id="ob_city" placeholder="Béjaïa"></div>
   </div>
   <div class="ob-step" data-step="3">
-    <h1>Ton corps</h1><p class="intro">Pour personnaliser tes calculs et ton suivi.</p>
-    <div class="note">💡 <span>Ta <b>taille</b> et ton <b>poids</b> servent à calculer ton <b>IMC</b>, tes calories et tes besoins. Touche un champ pour faire défiler la roue.</span></div>
-    <div class="field"><label>Taille *</label><div class="inp pkfield" id="ob_h" data-v="" onclick="pickInt('Taille (cm)',120,220,170,'cm',v=>setObPk('ob_h',v,v+' cm'))">Choisir ta taille</div></div>
-    <div class="field"><label>Poids *</label><div class="inp pkfield" id="ob_w" data-v="" onclick="pickWeightOb()">Choisir ton poids</div></div>
+    <h1>Ton corps</h1><p class="intro">Pour calculer tes zones et ton IMC.</p>
+    <div class="field"><label>Taille (cm) *</label><input class="inp" id="ob_h" type="number" placeholder="175"></div>
+    <div class="field"><label>Poids (kg) *</label><input class="inp" id="ob_w" type="number" placeholder="62"></div>
+    <div class="field"><label>FC max (bpm) — optionnel</label><input class="inp" id="ob_hrmax" type="number" placeholder="196"></div>
+    <div class="field"><label>FC repos (bpm) — optionnel</label><input class="inp" id="ob_hrrest" type="number" placeholder="52"></div>
   </div>
   <div class="ob-step" data-step="4">
     <h1>Ton niveau</h1><p class="intro">Sois honnête, le plan s'adapte.</p>
-    <div class="note">💡 <span>Le <b>niveau</b> ajuste l'intensité de ton plan. Pas sûr ? Touche <b>« Comment choisir ? »</b>. Le <b>kilométrage hebdo</b> est ce que tu cours actuellement par semaine.</span></div>
-    <div class="field"><label style="display:flex;align-items:center;justify-content:space-between">Niveau *<span style="color:var(--e);font-size:12px;font-weight:600;cursor:pointer" onclick="openLevelGuide()">ℹ️ Comment choisir ?</span></label>
+    <div class="field"><label>Niveau *</label>
       <div class="pills" id="ob_level">
         <div class="pill" data-v="Débutant">Débutant</div><div class="pill" data-v="Intermédiaire">Intermédiaire</div>
-        <div class="pill" data-v="Confirmé">Confirmé</div><div class="pill" data-v="Très avancé">Très avancé</div><div class="pill" data-v="Élite">Élite</div>
+        <div class="pill on" data-v="Confirmé">Confirmé</div><div class="pill" data-v="Avancé">Avancé</div><div class="pill" data-v="Élite">Élite</div>
       </div>
     </div>
-    <div class="field"><label>Kilométrage hebdo *</label><div class="inp pkfield" id="ob_km" data-v="" onclick="pickInt('Km / semaine',0,200,40,'km',v=>setObPk('ob_km',v,v+' km/sem'),5)">Choisir ton volume</div></div>
+    <div class="field"><label>Kilométrage hebdo (km)</label><input class="inp" id="ob_km" type="number" placeholder="55"></div>
   </div>
   <div class="ob-step" data-step="5">
     <h1>Ton objectif</h1><p class="intro">Ce qui te fait courir.</p>
-    <div class="field"><label>Objectif *</label><input class="inp" id="ob_goal" placeholder="Ex : passer sous 20:00 au 5 km"></div>
+    <div class="field"><label>Objectif *</label><input class="inp" id="ob_goal" placeholder="Passer sous 15:00 au 5000m"></div>
     <div class="field"><label>Date de compétition *</label><input class="inp" id="ob_compdate" type="date"></div>
   </div>
   <div class="ob-step" data-step="6">
-    <h1>Tes performances</h1><p class="intro">Ajoute tes meilleurs chronos. Au moins un est requis.</p>
-    <div class="note">💡 <span>Tes chronos calculent ton <b>VDOT</b> (ta « cylindrée ») et toutes tes <b>allures d'entraînement</b>. Donne au moins un chrono récent et fiable. Choisis la distance puis le temps avec les roues.</span></div>
-    <div id="ob_perfs"></div>
-    <button class="addperf" id="ob_addperf" onclick="addPerfRow()">＋ Ajouter une autre performance</button>
+    <h1>Tes chronos</h1><p class="intro">Format mm:ss ou hh:mm:ss. Le 5000m est requis.</p>
+    <div class="field"><label>5000m *</label><input class="inp" id="ob_5k" placeholder="15:42"></div>
+    <div class="field"><label>3000m — optionnel</label><input class="inp" id="ob_3k" placeholder="8:57"></div>
+    <div class="field"><label>1500m — optionnel</label><input class="inp" id="ob_1500" placeholder="4:08"></div>
+    <div class="field"><label>10km — optionnel</label><input class="inp" id="ob_10k" placeholder="32:30"></div>
   </div>
   <div class="ob-step" data-step="7">
     <h1>Ta disponibilité</h1><p class="intro">Quand peux-tu t'entraîner ?</p>
-    <div class="note">💡 <span>Choisis les <b>jours</b> où tu peux courir : le Coach IA y placera les bonnes séances. Plus tu as de jours, plus le plan est complet.</span></div>
     <div class="field"><label>Jours disponibles *</label>
       <div class="pills" id="ob_days">
         <div class="pill" data-v="1">Lun</div><div class="pill" data-v="2">Mar</div><div class="pill" data-v="3">Mer</div>
         <div class="pill" data-v="4">Jeu</div><div class="pill" data-v="5">Ven</div><div class="pill" data-v="6">Sam</div><div class="pill" data-v="0">Dim</div>
       </div>
     </div>
-    <div class="field"><label>Temps par séance *</label><div class="inp pkfield" id="ob_time" data-v="" onclick="pickInt('Minutes / séance',20,180,60,'min',v=>setObPk('ob_time',v,v+' min'),5)">Choisir une durée</div></div>
-    <div class="field"><label>Coach — optionnel</label><input class="inp" id="ob_coach" placeholder="Nom de ton coach"></div>
+    <div class="field"><label>Temps par séance (min) *</label><input class="inp" id="ob_time" type="number" placeholder="60"></div>
+    <div class="field"><label>Coach — optionnel</label><input class="inp" id="ob_coach" placeholder="Chikh Zazi"></div>
   </div>
   <div class="ob-foot">
     <button class="btn ghost" id="obPrev" style="flex:0 0 90px;">Retour</button>
@@ -370,7 +321,7 @@ hr.hl{border:none;border-top:1px solid var(--hair);margin:14px 0;}
 <div id="scroll">
   <div class="topbar">
     <div><div class="tb-title" id="tbTitle">Accueil</div><div class="tb-sub" id="tbSub"></div></div>
-    <div class="tb-gear" id="tbAvatar" onclick="nav('profil')"></div>
+    <div class="tb-gear" onclick="openSettings()">⚙️</div>
   </div>
 
   <div class="scr on" id="s-home"></div>
@@ -390,16 +341,16 @@ hr.hl{border:none;border-top:1px solid var(--hair);margin:14px 0;}
   <div class="nb" data-s="profil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Profil</span></div>
 </div>
 
-<!-- WHEEL PICKER -->
-<div class="ov" id="ovPicker" style="z-index:13800"><div class="ov-card" style="max-width:430px">
-  <div class="ov-head"><h2 id="pkTitle">Choisir</h2><div class="x" onclick="closeOv('ovPicker')">✕</div></div>
-  <div id="pkWheels" class="pk-wrap"></div>
-  <button class="btn" style="margin-top:18px" id="pkOk">Valider</button>
-</div></div>
-
 <div id="toast"></div>
 <canvas id="confetti"></canvas>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  window.supabaseClient = supabase.createClient(
+    'https://bsrbzuhvqtjkkmpmxyzw.supabase.co',
+    'sb_publishable_d1eInkDkCJG-Fx4S8UqNgw_Bm6uQuKw'
+  );
+</script>
 <script src="app.js"></script>
 </body>
 </html>
