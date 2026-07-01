@@ -2420,8 +2420,13 @@ function prayerTimes(){
 function age(){ if(!P.bday)return'—'; const d=new Date(P.bday); return Math.floor((Date.now()-d)/31557600000); }
 function renderProfile(){
   const xp=xpProgress();
+  const userEmail = (window.currentUserEmail) ? window.currentUserEmail : null;
   let h='<div class="card stag" style="text-align:center"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--e),var(--marineL));display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-family:Manrope;font-weight:800;font-size:34px">'+(P.name?P.name[0].toUpperCase():'?')+'</div>';
-  h+='<div class="man" style="font-weight:800;font-size:22px">'+(P.name||'Athlète')+'</div><div class="badge" style="margin-top:8px">'+XP.name+' · Niv. '+XP.level+'</div></div>';
+  h+='<div class="man" style="font-weight:800;font-size:22px">'+(P.name||'Athlète')+'</div><div class="badge" style="margin-top:8px">'+XP.name+' · Niv. '+XP.level+'</div>';
+  h+=userEmail
+    ? '<div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:#33D399;display:inline-block"></span>Connecté · '+userEmail+'</div>'
+    : '<div style="margin-top:10px;font-size:12px;color:var(--dim)">Non connecté au cloud</div>';
+  h+='</div>';
   h+='<div class="card stag" style="animation-delay:.05s"><div class="sgrid"><div class="sbox"><div class="v">'+(P.height||'—')+'</div><div class="l">Taille (cm)</div></div><div class="sbox"><div class="v">'+(P.weight||'—')+'</div><div class="l">Poids (kg)</div></div><div class="sbox"><div class="v">'+age()+'</div><div class="l">Âge</div></div><div class="sbox"><div class="v">'+(getUserVDOT()||'—')+'</div><div class="l">VDOT</div></div></div></div>';
   h+='<div class="card stag" style="animation-delay:.10s"><div class="row" style="margin-bottom:8px"><span class="lab">Progression XP</span><span class="mono" style="color:var(--e)">'+XP.total+' XP</span></div><div class="pbar"><div style="width:'+xp.pct+'%"></div></div></div>';
   if(P.coach) h+='<div class="card stag" style="animation-delay:.12s"><div class="row"><span class="lab">Coach</span><span style="font-weight:600">'+P.coach+'</span></div></div>';
@@ -2530,6 +2535,7 @@ async function startApp(){
   const { data:{ session } } = await window.supabaseClient.auth.getSession();
   if(session && session.user){
     window.currentUserId = session.user.id;
+    window.currentUserEmail = session.user.email;
     await cloudPullAll(session.user.id);
     reloadState();
     hideLoginScreen();
@@ -2540,6 +2546,7 @@ async function startApp(){
   window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if(event === 'SIGNED_IN' && session){
       window.currentUserId = session.user.id;
+      window.currentUserEmail = session.user.email;
       await cloudPullAll(session.user.id);
       reloadState();
       hideLoginScreen();
