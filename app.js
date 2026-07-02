@@ -2584,21 +2584,18 @@ async function callCoachAI(mode, extra){
   if(!window.supabaseClient) throw new Error('Supabase non initialisé');
   const { data:{ session } } = await window.supabaseClient.auth.getSession();
   if(!session) throw new Error('Tu dois être connecté pour utiliser le Coach IA');
-  const resp = await fetch(COACH_AI_URL, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token },
-    body: JSON.stringify({
+  const { data, error } = await window.supabaseClient.functions.invoke('coach-ai', {
+    body: {
       mode,
       profile: P,
       recentSessions: (SESS||[]).slice(-10),
       records: RECORDS||[],
       extra: extra||{}
-    })
+    }
   });
-  let data;
-  try{ data = await resp.json(); }catch(e){ throw new Error('Réponse invalide du serveur'); }
-  if(!resp.ok || data.error) throw new Error(data.error || ('Erreur serveur ('+resp.status+')'));
-  return data.result;
+  if(error) throw new Error(error.message || 'Erreur de connexion au coach IA');
+  if(data && data.error) throw new Error(data.error);
+  return data && data.result;
 }
 function parseAIJson(text){
   try{ const clean=String(text).replace(/```json|```/g,'').trim(); return JSON.parse(clean); }catch(e){ return null; }
